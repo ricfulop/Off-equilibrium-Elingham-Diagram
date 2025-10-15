@@ -249,8 +249,8 @@ def create_info_text(validation_results: List[Dict]) -> str:
                        H2_EFFICIENCY, MOLECULAR_WEIGHTS, PROCESSING_RATES)
     
     # Calculate particle volume and mass
-    # Use the first particle radius from the results
-    first_result = results[0] if results and len(results) > 0 else None
+    # Use the first particle radius from the validation_results
+    first_result = validation_results[0] if validation_results and len(validation_results) > 0 else None
     if first_result and 'particle_radius_um' in first_result:
         particle_radius_um = first_result['particle_radius_um']
         particle_radius_m = particle_radius_um * 1e-6  # Convert µm to m
