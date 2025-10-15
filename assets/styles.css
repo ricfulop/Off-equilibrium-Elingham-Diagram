@@ -1,0 +1,121 @@
+/* Custom CSS for Off-Equilibrium Ellingham Diagram App */
+
+.app-header {
+    background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
+    color: white;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 100px;
+    box-sizing: border-box;
+}
+
+.header-left {
+    flex: 1;
+}
+
+.header-right {
+    text-align: right;
+    padding: 10px;
+    flex-shrink: 0;
+}
+
+.mit-logo {
+    height: 60px;
+    width: auto;
+    margin-bottom: 10px;
+    filter: brightness(0) invert(1); /* Make logo white */
+}
+
+.mit-attribution {
+    margin: 0;
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+}
+
+.mit-affiliation {
+    margin: 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.app-title {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.app-subtitle {
+    font-size: 1rem;
+    opacity: 0.9;
+    margin: 0.5rem 0 0 0;
+}
+
+.control-panel {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.control-section {
+    margin-bottom: 1.5rem;
+}
+
+.control-section h6 {
+    color: #495057;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.25rem;
+}
+
+.plot-container {
+    background-color: white;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.info-panel {
+    background-color: #e9ecef;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    border-left: 4px solid #007bff;
+}
+
+.info-title {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.info-value {
+    font-family: 'Courier New', monospace;
+    background-color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+}
+
+.feasibility-positive {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.feasibility-negative {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.feasibility-neutral {
+    color: #6c757d;
+    font-weight: bold;
+}
