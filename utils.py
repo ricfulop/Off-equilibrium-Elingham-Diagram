@@ -187,11 +187,26 @@ def create_info_text(validation_results: List[Dict]) -> str:
     for result in validation_results:
         oxide = result['oxide']
         T_C = result['temperature_C']
+        T_K = result['temperature_K']
         E_MV_m = result['electric_field_MV_m']
         r_um = result['particle_radius_um']
         DG_eq = result['DG_eq_kJ_per_molO2']
         DG_eff = result['DG_eff_kJ_per_molO2']
         feasibility, color_class = result['feasibility']
+        
+        # Calculate H₂ partial pressure requirement
+        # For H₂ reduction: MO + H₂ → M + H₂O
+        # At equilibrium: ΔG = RT ln(K) = RT ln(P_H₂O/P_H₂)
+        # So: log(P_H₂/P_H₂O) = -ΔG/(2.303 * RT)
+        R = 8.314  # J/(mol·K)
+        DG_J = DG_eff * 1000  # Convert to J/mol
+        log_H2_H2O = -DG_J / (2.303 * R * T_K)
+        H2_H2O_ratio = 10**log_H2_H2O
+        
+        # For reduction to occur, we need P_H₂ > P_H₂O × (H₂/H₂O)
+        # Assuming P_total = 1 atm, if we have 25% H₂ available
+        P_H2_available = 0.25  # atm (25% of 1 atm)
+        P_H2_needed = P_H2_available / H2_H2O_ratio if H2_H2O_ratio > 0 else float('inf')
         
         text_lines.append(f"**{oxide}** at {T_C:.0f}°C:")
         text_lines.append(f"- Electric field: {E_MV_m:.1f} MV/m")
@@ -199,6 +214,18 @@ def create_info_text(validation_results: List[Dict]) -> str:
         text_lines.append(f"- ΔG° (equilibrium): {DG_eq:.1f} kJ/mol O₂")
         text_lines.append(f"- ΔG_eff (off-equilibrium): {DG_eff:.1f} kJ/mol O₂")
         text_lines.append(f"- Reduction feasibility: {feasibility}")
+        
+        # Add H₂ partial pressure analysis
+        if P_H2_needed < float('inf'):
+            text_lines.append(f"- **H₂ partial pressure needed**: {P_H2_needed:.4f} atm")
+            if P_H2_needed <= P_H2_available:
+                text_lines.append(f"- **✅ H₂ reduction feasible** with 25% H₂ (0.25 atm available)")
+            else:
+                H2_percent_needed = (P_H2_needed / P_H2_available) * 100
+                text_lines.append(f"- **❌ H₂ reduction requires {H2_percent_needed:.1f}% H₂** (more than 25% available)")
+        else:
+            text_lines.append(f"- **H₂ partial pressure needed**: Very high (reduction unfavorable)")
+        
         text_lines.append("")
     
     return "\n".join(text_lines)

@@ -180,7 +180,6 @@ app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             html.Div([
-                html.H5("Thermodynamic Analysis", className="info-title"),
                 html.Div(id="info-panel-content")
             ], className="info-panel")
         ])
