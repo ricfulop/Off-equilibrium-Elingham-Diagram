@@ -211,14 +211,16 @@ def create_info_text(validation_results: List[Dict]) -> str:
         
         # Calculate minimum H₂ pressure needed for reduction
         # P_H₂_min = P_H₂O × exp(ΔG°/RT)
-        if DG_eq_J < 0:  # If ΔG° is negative (favorable)
-            # For very negative ΔG°, we need very little H₂
-            P_H2_needed = P_H2O_assumed * np.exp(DG_eq_J / (R * T_K))
-            # Cap the minimum at a reasonable value
-            P_H2_needed = max(P_H2_needed, 1e-6)  # Minimum 1 ppm
-        else:  # If ΔG° is positive (unfavorable)
-            # For positive ΔG°, we need high H₂ pressure
-            P_H2_needed = P_H2O_assumed * np.exp(DG_eq_J / (R * T_K))
+        P_H2_needed = P_H2O_assumed * np.exp(DG_eq_J / (R * T_K))
+        
+        # Debug: Add some debug info to see what's happening
+        debug_info = f" (DG_eq={DG_eq:.1f} kJ/mol, exp={np.exp(DG_eq_J / (R * T_K)):.2e})"
+        
+        # Format the pressure appropriately
+        if P_H2_needed < 1e-4:
+            P_H2_display = f"{P_H2_needed:.2e} atm"
+        else:
+            P_H2_display = f"{P_H2_needed:.4f} atm"
         
         text_lines.append(f"**{oxide}** at {T_C:.0f}°C:")
         text_lines.append(f"- Electric field: {E_MV_m:.1f} MV/m")
@@ -229,17 +231,102 @@ def create_info_text(validation_results: List[Dict]) -> str:
         
         # Add H₂ partial pressure analysis
         P_H2_available = 0.25  # atm (25% of 1 atm)
-        if P_H2_needed < float('inf'):
-            text_lines.append(f"- **H₂ partial pressure needed**: {P_H2_needed:.4f} atm")
-            if P_H2_needed <= P_H2_available:
-                text_lines.append(f"- **✅ H₂ reduction feasible** with 25% H₂ (0.25 atm available)")
-            else:
-                H2_percent_needed = (P_H2_needed / P_H2_available) * 100
-                text_lines.append(f"- **❌ H₂ reduction requires {H2_percent_needed:.1f}% H₂** (more than 25% available)")
+        text_lines.append(f"- **H₂ partial pressure needed**: {P_H2_display}{debug_info}")
+        if P_H2_needed <= P_H2_available:
+            text_lines.append(f"- **✅ H₂ reduction feasible** with 25% H₂ (0.25 atm available)")
         else:
-            text_lines.append(f"- **H₂ partial pressure needed**: Very high (reduction unfavorable)")
+            H2_percent_needed = (P_H2_needed / P_H2_available) * 100
+            text_lines.append(f"- **❌ H₂ reduction requires {H2_percent_needed:.1f}% H₂** (more than 25% available)")
         
         text_lines.append("")
+    
+    # Add industrial processing analysis
+    text_lines.append("## 🏭 Industrial Processing Analysis")
+    text_lines.append("")
+    
+    # Import config values
+    from config import (TUBE_LENGTH, TUBE_DIAMETER, PARTICLE_DENSITY, GAS_VELOCITY, 
+                       H2_EFFICIENCY, MOLECULAR_WEIGHTS, PROCESSING_RATES)
+    
+    # Calculate particle volume and mass
+    # Use the first particle radius from the results
+    first_result = results[0] if results else None
+    if first_result:
+        particle_radius_um = first_result['particle_radius_um']
+        particle_radius_m = particle_radius_um * 1e-6  # Convert µm to m
+    else:
+        particle_radius_m = 1e-6  # Default 1 µm
+    particle_volume = (4/3) * np.pi * particle_radius_m**3  # m³
+    particle_mass = PARTICLE_DENSITY * particle_volume  # kg
+    
+    # Gas flow assumptions
+    residence_time = TUBE_LENGTH / GAS_VELOCITY  # s
+    
+    # Calculate particles per kg
+    particles_per_kg = 1.0 / particle_mass
+    
+    # Calculate H₂ consumption per kg of particles
+    # Assuming complete reduction: MO + H₂ → M + H₂O
+    # For TiO₂: TiO₂ + H₂ → Ti + H₂O (1 mol H₂ per mol TiO₂)
+    
+    # Get the oxide from the first result
+    oxide = first_result['oxide'] if first_result else 'TiO2'
+    oxide_mw = MOLECULAR_WEIGHTS.get(oxide, 100.0)  # Default fallback
+    h2_mw = 2.016  # g/mol
+    
+    # Moles of oxide per kg
+    moles_oxide_per_kg = 1000 / oxide_mw  # mol/kg
+    
+    # Moles of H₂ needed per kg (1:1 stoichiometry for most oxides)
+    moles_h2_per_kg = moles_oxide_per_kg  # mol/kg
+    
+    # Mass of H₂ needed per kg
+    mass_h2_per_kg = moles_h2_per_kg * h2_mw / 1000  # kg H₂/kg oxide
+    
+    text_lines.append(f"**Processing Parameters:**")
+    text_lines.append(f"- Tube length: {TUBE_LENGTH*100:.0f} cm")
+    text_lines.append(f"- Tube diameter: {TUBE_DIAMETER*100:.0f} cm")
+    text_lines.append(f"- Gas velocity: {GAS_VELOCITY:.1f} m/s")
+    text_lines.append(f"- Residence time: {residence_time:.1f} s")
+    text_lines.append(f"- Particle mass: {particle_mass*1e9:.1f} ng")
+    text_lines.append(f"- Particles per kg: {particles_per_kg:.2e}")
+    text_lines.append("")
+    
+    text_lines.append(f"**H₂ Consumption Analysis:**")
+    text_lines.append(f"- Molecular weight of {oxide}: {oxide_mw:.1f} g/mol")
+    text_lines.append(f"- H₂ needed per kg {oxide}: {mass_h2_per_kg:.3f} kg H₂/kg oxide")
+    text_lines.append(f"- Molar ratio: {moles_h2_per_kg:.2f} mol H₂/kg oxide")
+    text_lines.append("")
+    
+    text_lines.append(f"**Processing Rate Analysis:**")
+    for rate in PROCESSING_RATES:
+        h2_flow_rate = rate * mass_h2_per_kg  # kg H₂/hr
+        h2_volumetric_flow = h2_flow_rate * 22.4 / h2_mw  # m³/hr (at STP)
+        
+        # Calculate required H₂ concentration in feed gas
+        # Assuming 25% H₂ in feed gas
+        total_gas_flow = h2_volumetric_flow / 0.25  # m³/hr
+        n2_flow = total_gas_flow - h2_volumetric_flow  # m³/hr
+        
+        text_lines.append(f"- **{rate} kg/hr processing:**")
+        text_lines.append(f"  - H₂ consumption: {h2_flow_rate:.2f} kg H₂/hr")
+        text_lines.append(f"  - H₂ volumetric flow: {h2_volumetric_flow:.1f} m³/hr")
+        text_lines.append(f"  - Total gas flow: {total_gas_flow:.1f} m³/hr")
+        text_lines.append(f"  - N₂ flow: {n2_flow:.1f} m³/hr")
+        text_lines.append("")
+    
+    # Add reduction kinetics analysis
+    text_lines.append(f"**Reduction Kinetics:**")
+    text_lines.append(f"- Single particle reduction time: ~{residence_time:.1f} s (residence time)")
+    text_lines.append(f"- Reduction rate: {1/residence_time:.2f} particles/s")
+    text_lines.append(f"- Mass reduction rate: {particle_mass/residence_time*3600:.2e} kg/hr per particle")
+    text_lines.append("")
+    
+    # Add efficiency analysis
+    text_lines.append(f"**Process Efficiency:**")
+    text_lines.append(f"- H₂ utilization efficiency: {H2_EFFICIENCY*100:.0f}%")
+    text_lines.append(f"- Actual H₂ consumption (with efficiency): {mass_h2_per_kg/H2_EFFICIENCY:.3f} kg H₂/kg oxide")
+    text_lines.append("")
     
     return "\n".join(text_lines)
 

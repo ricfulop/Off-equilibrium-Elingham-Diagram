@@ -50,3 +50,30 @@ LINE_STYLES = {
 
 # File paths
 DATA_FILE = 'Flash_JANAF_Master_ext_Tgrid_Gf.pkl'
+
+# Industrial processing parameters
+TUBE_LENGTH = 0.30  # m (30 cm)
+TUBE_DIAMETER = 0.05  # m (5 cm)
+PARTICLE_DENSITY = 4500  # kg/m³ (typical for metal oxides)
+GAS_VELOCITY = 1.0  # m/s (typical for fluidized bed)
+H2_EFFICIENCY = 0.95  # H₂ utilization efficiency (95%)
+
+# Molecular weights (g/mol)
+MOLECULAR_WEIGHTS = {
+    'TiO2': 79.9,
+    'ZrO2': 123.2,
+    'Nb2O5': 265.8,
+    'MoO3': 143.9,
+    'WO3': 231.8,
+    'CeO2': 172.1,
+    'Cu2O': 143.1,
+    'Ta2O5': 441.9,
+    'V2O3': 149.9,
+    'V2O5': 181.9,
+    'NbO': 108.9,
+    'MoO2': 127.9,
+    'WO2': 215.8,
+}
+
+# Processing rates to analyze (kg/hr)
+PROCESSING_RATES = [1, 10, 100, 1000]
