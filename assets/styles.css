@@ -24,24 +24,29 @@
     flex-shrink: 0;
 }
 
-.mit-logo {
-    height: 60px;
-    width: auto;
-    margin-bottom: 10px;
-    filter: brightness(0) invert(1); /* Make logo white */
+.author-info {
+    margin-top: 10px;
+    text-align: left;
 }
 
-.mit-attribution {
+.author-info .mit-attribution {
     margin: 0;
     font-size: 14px;
     font-weight: bold;
     color: white;
 }
 
-.mit-affiliation {
+.author-info .mit-affiliation {
     margin: 0;
     font-size: 12px;
     color: rgba(255, 255, 255, 0.8);
+}
+
+.mit-logo {
+    height: 60px;
+    width: auto;
+    margin-bottom: 10px;
+    filter: brightness(0) invert(1); /* Make logo white */
 }
 
 .app-title {

@@ -50,21 +50,19 @@ app.layout = dbc.Container([
         html.Div([
             html.H1("Off-Equilibrium Ellingham Diagrams", className="app-title"),
             html.P("Plasma Flash Reactor (PFR) Thermodynamic Analysis", className="app-subtitle"),
-            html.P("Interactive visualization of electric field-enhanced metal oxide reduction", className="app-subtitle")
+            html.P("Interactive visualization of electric field-enhanced metal oxide reduction", className="app-subtitle"),
+            html.Div([
+                html.P("Ric Fulop", className="mit-attribution"),
+                html.P("Center for Bits and Atoms", className="mit-affiliation")
+            ], className="author-info")
         ], className="header-left"),
         html.Div([
-            html.Div([
-                html.Img(
-                    src="assets/mit_lockup_std-three-line_rgb_silver-gray.svg",
-                    className="mit-logo",
-                    style={"height": "60px", "width": "auto", "margin-bottom": "10px"},
-                    alt="MIT Logo"
-                ),
-                html.Div([
-                    html.P("Ric Fulop", className="mit-attribution"),
-                    html.P("Center for Bits and Atoms", className="mit-affiliation")
-                ])
-            ], style={"text-align": "right"})
+            html.Img(
+                src="assets/mit_lockup_std-three-line_rgb_silver-gray.svg",
+                className="mit-logo",
+                style={"height": "60px", "width": "auto", "margin-bottom": "10px"},
+                alt="MIT Logo"
+            )
         ], className="header-right")
     ], className="app-header"),
     
@@ -235,8 +233,7 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
     # Create subplot with secondary axes
     fig = make_subplots(
         rows=1, cols=1,
-        specs=[[{"secondary_y": True}]],
-        subplot_titles=("Off-Equilibrium Ellingham Diagram",)
+        specs=[[{"secondary_y": True}]]
     )
     
     # Add traces for each material
@@ -295,13 +292,13 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
             # Calculate pO2 scale
             log_pO2 = thermo_engine.calc_pO2_scale(T_K)
             
-            # Add gas ratio traces as regular traces (simpler approach)
+            # Add gas ratio traces to secondary y-axis
             fig.add_trace(
                 go.Scatter(
                     x=T_C, y=log_H2_H2O,
                     mode='lines',
                     name="log(H₂/H₂O)",
-                    line=dict(color='red', width=1, dash='dot'),
+                    line=dict(color='red', width=2, dash='dot'),
                     yaxis='y2'
                 ),
                 secondary_y=True
@@ -312,7 +309,7 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
                     x=T_C, y=log_CO_CO2,
                     mode='lines', 
                     name="log(CO/CO₂)",
-                    line=dict(color='blue', width=1, dash='dot'),
+                    line=dict(color='blue', width=2, dash='dot'),
                     yaxis='y2'
                 ),
                 secondary_y=True
@@ -323,21 +320,25 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
                     x=T_C, y=log_pO2,
                     mode='lines',
                     name="log₁₀(pO₂)",
-                    line=dict(color='green', width=1, dash='dot'),
+                    line=dict(color='green', width=2, dash='dot'),
                     yaxis='y2'
                 ),
                 secondary_y=True
             )
             
-            # Update secondary y-axis
-            fig.update_yaxes(title_text="log(CO/CO₂) & log₁₀(pO₂)", secondary_y=True)
+            # Update secondary y-axis with proper title
+            fig.update_yaxes(
+                title_text="Gas Ratios: log(H₂/H₂O), log(CO/CO₂), log₁₀(pO₂)", 
+                secondary_y=True
+            )
         except Exception as e:
             print(f"Warning: Could not add gas ratio scales: {e}")
+            import traceback
+            traceback.print_exc()
             pass
     
     # Update layout
     fig.update_layout(
-        title="Off-Equilibrium Ellingham Diagram",
         xaxis_title="Temperature (°C)",
         yaxis_title="ΔG (kJ/mol O₂)",
         hovermode='closest',

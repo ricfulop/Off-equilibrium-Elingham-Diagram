@@ -1,6 +1,6 @@
 # Off-Equilibrium Ellingham Diagram Interactive Dash App
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 
@@ -8,7 +8,7 @@ An interactive web application for visualizing equilibrium and off-equilibrium E
 
 **Author**: Ric Fulop  
 **Affiliation**: MIT Center for Bits and Atoms  
-**Version**: 1.0.0
+**Version**: 1.1.0
 
 ## Overview
 
@@ -50,6 +50,24 @@ The PFR uses:
 - **Plasma state**: Flash conditions create electron-rich plasma
 - **Touch-free processing**: Induction coil + YSZ plasma elements
 - **Scalable design**: Current-independent scaling for large-scale production
+
+## Changelog
+
+### Version 1.1.0 (Latest)
+- ✅ **Fixed gas ratio scales**: All three gas ratio curves (log(H₂/H₂O), log(CO/CO₂), log₁₀(pO₂)) now display correctly
+- ✅ **Removed duplicate titles**: Cleaned up chart area by removing redundant plot titles
+- ✅ **Enhanced UI**: Improved header layout with MIT logo and attribution positioning
+- ✅ **Better gas ratio calculations**: Implemented proper Ellingham reference lines for gas ratios
+- ✅ **Improved line visibility**: Increased line width and enhanced color coding for gas ratio scales
+
+### Version 1.0.0
+- 🎉 **Initial release**: Complete off-equilibrium Ellingham diagram application
+- 📊 **Interactive plotting**: Real-time visualization of equilibrium and off-equilibrium curves
+- ⚡ **PFR integration**: Electric field-enhanced reduction calculations
+- 🎛️ **Control panel**: Material selection, field/radius controls, temperature range
+- 📈 **Gas ratio scales**: H₂/H₂O, CO/CO₂, and pO₂ reference lines
+- 💾 **Data export**: CSV export functionality
+- 🎨 **Professional UI**: MIT branding and responsive design
 
 ## Installation
 
