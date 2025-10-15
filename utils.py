@@ -250,8 +250,8 @@ def create_info_text(validation_results: List[Dict]) -> str:
     
     # Calculate particle volume and mass
     # Use the first particle radius from the results
-    first_result = results[0] if results else None
-    if first_result:
+    first_result = results[0] if results and len(results) > 0 else None
+    if first_result and 'particle_radius_um' in first_result:
         particle_radius_um = first_result['particle_radius_um']
         particle_radius_m = particle_radius_um * 1e-6  # Convert µm to m
     else:
@@ -270,7 +270,7 @@ def create_info_text(validation_results: List[Dict]) -> str:
     # For TiO₂: TiO₂ + H₂ → Ti + H₂O (1 mol H₂ per mol TiO₂)
     
     # Get the oxide from the first result
-    oxide = first_result['oxide'] if first_result else 'TiO2'
+    oxide = first_result['oxide'] if first_result and 'oxide' in first_result else 'TiO2'
     oxide_mw = MOLECULAR_WEIGHTS.get(oxide, 100.0)  # Default fallback
     h2_mw = 2.016  # g/mol
     
