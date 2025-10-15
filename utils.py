@@ -194,19 +194,31 @@ def create_info_text(validation_results: List[Dict]) -> str:
         DG_eff = result['DG_eff_kJ_per_molO2']
         feasibility, color_class = result['feasibility']
         
-        # Calculate H₂ partial pressure requirement
+        # Calculate H₂ partial pressure requirement for reduction
         # For H₂ reduction: MO + H₂ → M + H₂O
-        # At equilibrium: ΔG = RT ln(K) = RT ln(P_H₂O/P_H₂)
-        # So: log(P_H₂/P_H₂O) = -ΔG/(2.303 * RT)
-        R = 8.314  # J/(mol·K)
-        DG_J = DG_eff * 1000  # Convert to J/mol
-        log_H2_H2O = -DG_J / (2.303 * R * T_K)
-        H2_H2O_ratio = 10**log_H2_H2O
+        # The reaction quotient Q = P_H₂O / P_H₂
+        # For reduction to be favorable: ΔG = ΔG° + RT ln(Q) < 0
+        # So: ΔG° + RT ln(P_H₂O/P_H₂) < 0
+        # Therefore: ln(P_H₂O/P_H₂) < -ΔG°/(RT)
+        # So: P_H₂O/P_H₂ < exp(-ΔG°/RT)
+        # And: P_H₂ > P_H₂O × exp(ΔG°/RT)
         
-        # For reduction to occur, we need P_H₂ > P_H₂O × (H₂/H₂O)
-        # Assuming P_total = 1 atm, if we have 25% H₂ available
-        P_H2_available = 0.25  # atm (25% of 1 atm)
-        P_H2_needed = P_H2_available / H2_H2O_ratio if H2_H2O_ratio > 0 else float('inf')
+        R = 8.314  # J/(mol·K)
+        DG_eq_J = DG_eq * 1000  # Convert to J/mol
+        
+        # Assume a reasonable H₂O pressure (e.g., 0.01 atm from atmosphere)
+        P_H2O_assumed = 0.01  # atm
+        
+        # Calculate minimum H₂ pressure needed for reduction
+        # P_H₂_min = P_H₂O × exp(ΔG°/RT)
+        if DG_eq_J < 0:  # If ΔG° is negative (favorable)
+            # For very negative ΔG°, we need very little H₂
+            P_H2_needed = P_H2O_assumed * np.exp(DG_eq_J / (R * T_K))
+            # Cap the minimum at a reasonable value
+            P_H2_needed = max(P_H2_needed, 1e-6)  # Minimum 1 ppm
+        else:  # If ΔG° is positive (unfavorable)
+            # For positive ΔG°, we need high H₂ pressure
+            P_H2_needed = P_H2O_assumed * np.exp(DG_eq_J / (R * T_K))
         
         text_lines.append(f"**{oxide}** at {T_C:.0f}°C:")
         text_lines.append(f"- Electric field: {E_MV_m:.1f} MV/m")
@@ -216,6 +228,7 @@ def create_info_text(validation_results: List[Dict]) -> str:
         text_lines.append(f"- Reduction feasibility: {feasibility}")
         
         # Add H₂ partial pressure analysis
+        P_H2_available = 0.25  # atm (25% of 1 atm)
         if P_H2_needed < float('inf'):
             text_lines.append(f"- **H₂ partial pressure needed**: {P_H2_needed:.4f} atm")
             if P_H2_needed <= P_H2_available:
