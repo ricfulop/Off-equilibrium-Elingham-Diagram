@@ -225,6 +225,151 @@ class ThermodynamicEngine:
         
         return group_mapping.get(oxide_key, 'Other')
     
+    def calc_oxygen_potential_required(self, oxide_key: str, T_K: np.ndarray, E: float, r: float) -> np.ndarray:
+        """
+        Calculate required oxygen partial pressure for reduction under field and particle size.
+        
+        Implements the off-equilibrium stability condition:
+        ΔB = ΔG° - nFE·r - W_ph + (x/2)RT·ln(pO₂) = 0
+        
+        Args:
+            oxide_key: Oxide identifier
+            T_K: Temperature array in Kelvin
+            E: Electric field in V/m
+            r: Particle radius in m
+            
+        Returns:
+            ln(pO₂_req) - natural log of required oxygen partial pressure
+        """
+        # Get oxide data
+        oxide_data = self.data_loader.get_oxide_data(oxide_key)
+        if oxide_data is None:
+            return np.full_like(T_K, np.nan)
+        
+        n_electrons = oxide_data['n_electrons']
+        x_oxygen = oxide_data['n_oxygen']
+        
+        # Calculate effective Gibbs free energy (off-equilibrium)
+        DG_eff = self.calc_off_equilibrium_DG(oxide_key, T_K, E, r)
+        
+        # Calculate required oxygen potential
+        # From: ΔB = ΔG_eff + (x/2)RT·ln(pO₂) = 0
+        # So: ln(pO₂_req) = -2ΔG_eff/(xRT)
+        R = 8.314  # J/(mol·K)
+        ln_pO2_req = -2 * DG_eff * 1000 / (x_oxygen * R * T_K)  # Convert kJ to J
+        
+        return ln_pO2_req
+    
+    def calc_h2_h2o_equilibrium_constant(self, T_K: np.ndarray) -> np.ndarray:
+        """
+        Calculate equilibrium constant K_H for H₂ + 0.5O₂ → H₂O reaction.
+        
+        Uses JANAF data for H₂O and standard values for H₂.
+        
+        Args:
+            T_K: Temperature array in Kelvin
+            
+        Returns:
+            K_H(T) = p_H2O / (p_H2 * p_O2^0.5)
+        """
+        # Get H₂O formation Gibbs free energy from JANAF data
+        try:
+            h2o_data = self.data_loader.raw_data[self.data_loader.raw_data['species'] == 'Water (H2O)']
+            if h2o_data.empty:
+                # Fallback to standard values if no JANAF data
+                return self._calc_h2_h2o_constant_standard(T_K)
+            
+            # Interpolate H₂O formation Gibbs free energy
+            T_h2o = h2o_data['T_K'].values
+            DG_h2o = h2o_data['delta_f_G_kJ_per_mol'].values
+            
+            # Remove NaN values
+            valid_mask = ~np.isnan(DG_h2o)
+            T_h2o = T_h2o[valid_mask]
+            DG_h2o = DG_h2o[valid_mask]
+            
+            if len(T_h2o) == 0:
+                return self._calc_h2_h2o_constant_standard(T_K)
+            
+            # Interpolate to requested temperatures
+            DG_h2o_interp = np.interp(T_K, T_h2o, DG_h2o)
+            
+            # Calculate equilibrium constant
+            # For H₂ + 0.5O₂ → H₂O: K_H = exp(-ΔG°/RT)
+            R = 8.314  # J/(mol·K)
+            K_H = np.exp(-DG_h2o_interp * 1000 / (R * T_K))  # Convert kJ to J
+            
+            return K_H
+            
+        except Exception as e:
+            print(f"Warning: Could not calculate K_H from JANAF data: {e}")
+            return self._calc_h2_h2o_constant_standard(T_K)
+    
+    def _calc_h2_h2o_constant_standard(self, T_K: np.ndarray) -> np.ndarray:
+        """Calculate K_H using standard thermodynamic values."""
+        # Standard formation Gibbs free energy for H₂O (kJ/mol)
+        # Using approximate values: ΔG° ≈ -228 + 0.044*T (kJ/mol)
+        DG_h2o_standard = -228 + 0.044 * (T_K - 298)  # kJ/mol
+        
+        R = 8.314  # J/(mol·K)
+        K_H = np.exp(-DG_h2o_standard * 1000 / (R * T_K))  # Convert kJ to J
+        
+        return K_H
+    
+    def calc_h2_h2o_ratio_required(self, oxide_key: str, T_K: np.ndarray, E: float, r: float) -> np.ndarray:
+        """
+        Calculate required H₂/H₂O ratio for reduction under field and particle size.
+        
+        Implements the markdown method:
+        1. Calculate required oxygen potential: ln(pO₂_req)
+        2. Calculate H₂/H₂O equilibrium constant: K_H(T)
+        3. Calculate required ratio: H₂/H₂O = 1/(K_H * √pO₂_req)
+        
+        Args:
+            oxide_key: Oxide identifier
+            T_K: Temperature array in Kelvin
+            E: Electric field in V/m
+            r: Particle radius in m
+            
+        Returns:
+            Required H₂/H₂O ratio
+        """
+        # Step 1: Calculate required oxygen potential
+        ln_pO2_req = self.calc_oxygen_potential_required(oxide_key, T_K, E, r)
+        pO2_req = np.exp(ln_pO2_req)
+        
+        # Step 2: Calculate H₂/H₂O equilibrium constant
+        K_H = self.calc_h2_h2o_equilibrium_constant(T_K)
+        
+        # Step 3: Calculate required H₂/H₂O ratio
+        # H₂/H₂O = 1/(K_H * √pO₂_req)
+        h2_h2o_ratio = 1.0 / (K_H * np.sqrt(pO2_req))
+        
+        return h2_h2o_ratio
+    
+    def calc_h2_partial_pressure_required(self, oxide_key: str, T_K: np.ndarray, E: float, r: float, 
+                                         p_h2o: float = 0.01) -> np.ndarray:
+        """
+        Calculate required H₂ partial pressure for reduction.
+        
+        Args:
+            oxide_key: Oxide identifier
+            T_K: Temperature array in Kelvin
+            E: Electric field in V/m
+            r: Particle radius in m
+            p_h2o: H₂O partial pressure in atm (default: 0.01 atm)
+            
+        Returns:
+            Required H₂ partial pressure in atm
+        """
+        # Calculate required H₂/H₂O ratio
+        h2_h2o_ratio = self.calc_h2_h2o_ratio_required(oxide_key, T_K, E, r)
+        
+        # Calculate H₂ partial pressure
+        p_h2_req = h2_h2o_ratio * p_h2o
+        
+        return p_h2_req
+
     def validate_calculation(self, oxide_key: str, T_K: float, E: float, r: float) -> Dict:
         """
         Validate calculation against known data points.
@@ -250,6 +395,11 @@ class ThermodynamicEngine:
         electric_contribution = -(n_electrons * FARADAY_CONSTANT * E * r) / 1000
         W_ph = self._get_W_ph(oxide_key)
         
+        # Calculate new H₂ requirements using markdown method
+        ln_pO2_req = self.calc_oxygen_potential_required(oxide_key, np.array([T_K]), E, r)[0]
+        h2_h2o_ratio = self.calc_h2_h2o_ratio_required(oxide_key, np.array([T_K]), E, r)[0]
+        p_h2_req = self.calc_h2_partial_pressure_required(oxide_key, np.array([T_K]), E, r)[0]
+        
         validation = {
             'oxide': oxide_key,
             'temperature_K': T_K,
@@ -261,7 +411,11 @@ class ThermodynamicEngine:
             'W_ph_kJ_per_molO2': W_ph,
             'DG_eff_kJ_per_molO2': DG_eff,
             'n_electrons': n_electrons,
-            'feasibility': self.calc_reduction_feasibility(DG_eff)
+            'feasibility': self.calc_reduction_feasibility(DG_eff),
+            # New H₂ calculation results
+            'ln_pO2_req': ln_pO2_req,
+            'h2_h2o_ratio_req': h2_h2o_ratio,
+            'p_h2_req_atm': p_h2_req
         }
         
         return validation

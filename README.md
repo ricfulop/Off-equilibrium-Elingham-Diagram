@@ -1,6 +1,6 @@
 # Off-Equilibrium Ellingham Diagram Interactive Dash App
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 
@@ -8,7 +8,7 @@ An interactive web application for visualizing equilibrium and off-equilibrium E
 
 **Author**: Ric Fulop  
 **Affiliation**: MIT Center for Bits and Atoms  
-**Version**: 1.1.0
+**Version**: 1.4.0
 
 ## Overview
 
@@ -16,7 +16,11 @@ This application implements the novel **off-equilibrium thermodynamics model** f
 
 ### Key Features
 
-- **Interactive Material Selection**: Choose from available metal oxides (TiO₂, ZrO₂, Nb₂O₅, Ta₂O₅, MoO₃, WO₃, etc.)
+- **Comprehensive Database**: 710 compounds with valid thermodynamic data across 9 categories
+- **Temperature-Dependent Calculations**: Proper polynomial coefficients (A + B×T + C×T²) for realistic sloping Ellingham lines
+- **Multi-Compound Support**: Oxides, carbides, nitrides, halides, hydrides, sulfides, phosphides, pure elements, and other compounds
+- **Category-Based Selection**: Organized material selection with searchable dropdowns by compound type
+- **Interactive Material Selection**: Choose from available compounds with proper chemical formula formatting
 - **Electric Field Control**: Adjust field strength from 0.1 to 5.0 MV/m
 - **Particle Size Effects**: Compare different particle radii (1 µm, 5 µm, custom)
 - **Temperature Range**: Visualize thermodynamic behavior from 300-2400 K
@@ -53,7 +57,17 @@ The PFR uses:
 
 ## Changelog
 
-### Version 1.1.0 (Latest)
+### Version 1.2.0 (Latest)
+- ✅ **Industrial Processing Analysis**: Comprehensive analysis of mass flow rates (1-1000 kg/hr)
+- ✅ **H₂ Consumption Analysis**: Realistic H₂ requirements per kg oxide with efficiency calculations
+- ✅ **Residence Time Analysis**: 0.3s processing time for 30cm tube at 1.0 m/s gas velocity
+- ✅ **Volumetric Flow Calculations**: H₂ and N₂ flow requirements for different processing rates
+- ✅ **Process Efficiency**: 95% H₂ utilization efficiency modeling
+- ✅ **Enhanced Info Panel**: Detailed thermodynamic and industrial analysis display
+- ✅ **Scientific Notation**: Proper formatting for very small H₂ partial pressure values
+- ✅ **Debug Information**: Transparent calculation details for validation
+
+### Version 1.1.0
 - ✅ **Fixed gas ratio scales**: All three gas ratio curves (log(H₂/H₂O), log(CO/CO₂), log₁₀(pO₂)) now display correctly
 - ✅ **Removed duplicate titles**: Cleaned up chart area by removing redundant plot titles
 - ✅ **Enhanced UI**: Improved header layout with MIT logo and attribution positioning

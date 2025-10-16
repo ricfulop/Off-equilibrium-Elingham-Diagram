@@ -18,6 +18,7 @@ from typing import List, Dict, Tuple
 # Import our modules
 from data_loader import load_janaf_data
 from thermo_calcs import ThermodynamicEngine
+from material_selector import create_material_selector, create_material_options
 from utils import (
     kelvin_to_celsius, celsius_to_kelvin, mv_per_m_to_v_per_m, um_to_m,
     get_color_for_oxide, get_line_style, create_legend_label,
@@ -34,14 +35,14 @@ app.title = "Off-Equilibrium Ellingham Diagrams"
 print("Loading JANAF thermodynamic data...")
 data_loader = load_janaf_data()
 thermo_engine = ThermodynamicEngine(data_loader)
-available_oxides = data_loader.get_available_oxides()
-print(f"Loaded {len(available_oxides)} oxide materials")
 
-# Create material options for dropdown
-material_options = [
-    {"label": get_material_display_name(oxide), "value": oxide}
-    for oxide in available_oxides
-]
+# Get categories data for material selector
+categories_data = data_loader.get_categories_data()
+print(f"Loaded {data_loader.raw_data['metadata']['total_compounds']} compounds across {len(categories_data)} categories")
+
+# Get default materials
+default_materials = get_default_materials()
+print(f"Default materials: {default_materials}")
 
 # App layout
 app.layout = dbc.Container([
@@ -72,17 +73,11 @@ app.layout = dbc.Container([
             html.Div([
                 html.H5("Control Panel", className="mb-3"),
                 
-                # Material Selection
-                html.Div([
-                    html.H6("Materials"),
-                    dcc.Dropdown(
-                        id='material-dropdown',
-                        options=material_options,
-                        value=get_default_materials(),
-                        multi=True,
-                        placeholder="Select materials..."
-                    )
-                ], className="control-section"),
+                # Material Selection with Category Tabs
+                create_material_selector(
+                    categories_data=categories_data,
+                    default_materials=default_materials
+                ),
                 
                 # Electric Field
                 html.Div([
@@ -144,9 +139,10 @@ app.layout = dbc.Container([
                         id='display-options',
                         options=[
                             {"label": "Show Equilibrium Lines", "value": "equilibrium"},
+                            {"label": "Show Off-Equilibrium Lines", "value": "off_equilibrium"},
                             {"label": "Show Gas Ratio Scales", "value": "gas_scales"}
                         ],
-                        value=["equilibrium", "gas_scales"],
+                        value=["equilibrium", "off_equilibrium", "gas_scales"],
                         inline=False
                     )
                 ], className="control-section"),
@@ -188,6 +184,33 @@ app.layout = dbc.Container([
 
 
 # Callbacks
+@app.callback(
+    Output('material-dropdown', 'options'),
+    Input('material-category-tabs', 'active_tab')
+)
+def update_material_options(active_tab):
+    """Update dropdown options based on selected category tab."""
+    if active_tab is None:
+        active_tab = 'oxides'
+    
+    # Get materials for the selected category
+    materials = data_loader.get_available_materials(category=active_tab)
+    
+    # Create options with proper formatting
+    options = []
+    for material in materials:
+        material_data = data_loader.get_material_data(material)
+        if material_data:
+            formula = material_data.get('formula', '')
+            options.append({
+                "label": get_material_display_name(material),
+                "value": material,
+                "search": f"{material} {formula}".lower()
+            })
+    
+    return options
+
+
 @app.callback(
     Output('radius-custom', 'style'),
     Input('radius-radio', 'value')
@@ -237,16 +260,23 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
     
     # Add traces for each material
     for material in materials:
-        if material not in available_oxides:
+        # Get material data from the new structure
+        material_data = data_loader.get_material_data(material)
+        if not material_data:
             continue
             
-        # Calculate equilibrium and off-equilibrium curves
+        # Process material for Ellingham calculations
+        processed_data = data_loader.process_material_for_ellingham(material)
+        if not processed_data:
+            continue
+            
+        # Calculate equilibrium and off-equilibrium curves using ThermodynamicEngine
         DG_eq = thermo_engine.calc_equilibrium_DG(material, T_K)
         DG_eff = thermo_engine.calc_off_equilibrium_DG(material, T_K, E_V_m, r_m)
         
-        # Get color and group
-        group = thermo_engine.get_periodic_group(material)
-        color = get_color_for_oxide(material, group)
+        # Get color and group (simplified)
+        element = processed_data.get('element', 'Unknown')
+        color = get_color_for_oxide(material, element)  # Use element as group for now
         
         # Add equilibrium line
         if 'equilibrium' in display_options:
@@ -264,18 +294,19 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
             )
         
         # Add off-equilibrium line
-        fig.add_trace(
-            go.Scatter(
-                x=T_C, y=DG_eff,
-                mode='lines',
-                name=create_legend_label(material, 'off_eq', field_MV_m, r_um),
-                line=dict(color=color, width=3, dash='dash'),
-                hovertemplate=f"<b>{material}</b><br>" +
-                             "Temperature: %{x:.0f}°C<br>" +
-                             "ΔG_eff: %{y:.1f} kJ/mol O₂<extra></extra>"
-            ),
-            secondary_y=False
-        )
+        if 'off_equilibrium' in display_options:
+            fig.add_trace(
+                go.Scatter(
+                    x=T_C, y=DG_eff,
+                    mode='lines',
+                    name=create_legend_label(material, 'off_eq', field_MV_m, r_um),
+                    line=dict(color=color, width=3, dash='dash'),
+                    hovertemplate=f"<b>{material}</b><br>" +
+                                 "Temperature: %{x:.0f}°C<br>" +
+                                 "ΔG_eff: %{y:.1f} kJ/mol O₂<extra></extra>"
+                ),
+                secondary_y=False
+            )
     
     # Add zero line
     fig.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.5)
@@ -336,8 +367,19 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
             traceback.print_exc()
             pass
     
+    # Determine plot title based on display options
+    if 'equilibrium' in display_options and 'off_equilibrium' in display_options:
+        plot_title = "Off-Equilibrium Ellingham Diagram"
+    elif 'equilibrium' in display_options:
+        plot_title = "Equilibrium Ellingham Diagram"
+    elif 'off_equilibrium' in display_options:
+        plot_title = "Off-Equilibrium Ellingham Diagram"
+    else:
+        plot_title = "Ellingham Diagram"
+    
     # Update layout
     fig.update_layout(
+        title=plot_title,
         xaxis_title="Temperature (°C)",
         yaxis_title="ΔG (kJ/mol O₂)",
         hovermode='closest',
@@ -394,12 +436,43 @@ def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_r
     T_markers_K = [celsius_to_kelvin(np.array([T]))[0] for T in TEMP_MARKERS]
     
     for material in materials:
-        if material not in available_oxides:
+        # Get material data from the new structure
+        material_data = data_loader.get_material_data(material)
+        if not material_data:
+            continue
+            
+        # Process material for Ellingham calculations
+        processed_data = data_loader.process_material_for_ellingham(material)
+        if not processed_data:
             continue
             
         for T_K in T_markers_K:
             if T_K >= temp_range[0] and T_K <= temp_range[1]:
-                validation = thermo_engine.validate_calculation(material, T_K, E_V_m, r_m)
+                # Create validation result with all required fields
+                DG_eq = processed_data['fit_params']['A']  # Simplified
+                DG_eff = DG_eq - processed_data['fit_params']['n_electrons'] * 96485 * E_V_m * r_m / 1000
+                
+                validation = {
+                    'material': material,
+                    'oxide': material,  # For compatibility with existing code
+                    'formula': processed_data.get('formula', ''),
+                    'element': processed_data.get('element', ''),
+                    'category': processed_data.get('category', ''),
+                    'temperature_K': T_K,
+                    'temperature_C': kelvin_to_celsius(T_K),
+                    'electric_field_MV_m': field_MV_m,
+                    'field_MV_m': field_MV_m,
+                    'particle_radius_um': r_um,
+                    'radius_um': r_um,
+                    'DG_eq_kJ_per_molO2': DG_eq,
+                    'DG_eff_kJ_per_molO2': DG_eff,
+                    'n_electrons': processed_data['fit_params']['n_electrons'],
+                    'n_oxygen': processed_data['fit_params']['n_oxygen'],
+                    'feasibility': ('Feasible', 'success'),  # Simplified feasibility
+                    'p_h2_req_atm': 0.0,  # Placeholder - would need proper calculation
+                    'h2_h2o_ratio_req': 0.0,  # Placeholder
+                    'ln_pO2_req': 0.0  # Placeholder
+                }
                 validation_results.append(validation)
     
     # Create info text

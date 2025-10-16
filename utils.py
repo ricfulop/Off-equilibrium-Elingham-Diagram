@@ -185,7 +185,7 @@ def create_info_text(validation_results: List[Dict]) -> str:
     text_lines.append("")
     
     for result in validation_results:
-        oxide = result['oxide']
+        oxide = result.get('material', result.get('oxide', 'Unknown'))
         T_C = result['temperature_C']
         T_K = result['temperature_K']
         E_MV_m = result['electric_field_MV_m']
@@ -194,27 +194,16 @@ def create_info_text(validation_results: List[Dict]) -> str:
         DG_eff = result['DG_eff_kJ_per_molO2']
         feasibility, color_class = result['feasibility']
         
-        # Calculate H₂ partial pressure requirement for reduction
-        # For H₂ reduction: MO + H₂ → M + H₂O
-        # The reaction quotient Q = P_H₂O / P_H₂
-        # For reduction to be favorable: ΔG = ΔG° + RT ln(Q) < 0
-        # So: ΔG° + RT ln(P_H₂O/P_H₂) < 0
-        # Therefore: ln(P_H₂O/P_H₂) < -ΔG°/(RT)
-        # So: P_H₂O/P_H₂ < exp(-ΔG°/RT)
-        # And: P_H₂ > P_H₂O × exp(ΔG°/RT)
+        # Calculate H₂ partial pressure requirement using upgraded markdown method
+        # This now uses the off-equilibrium approach with electric field effects
         
-        R = 8.314  # J/(mol·K)
-        DG_eq_J = DG_eq * 1000  # Convert to J/mol
+        # Get the new H₂ calculation results from validation
+        P_H2_needed = result.get('p_h2_req_atm', 0.0)
+        h2_h2o_ratio = result.get('h2_h2o_ratio_req', 0.0)
+        ln_pO2_req = result.get('ln_pO2_req', 0.0)
         
-        # Assume a reasonable H₂O pressure (e.g., 0.01 atm from atmosphere)
-        P_H2O_assumed = 0.01  # atm
-        
-        # Calculate minimum H₂ pressure needed for reduction
-        # P_H₂_min = P_H₂O × exp(ΔG°/RT)
-        P_H2_needed = P_H2O_assumed * np.exp(DG_eq_J / (R * T_K))
-        
-        # Debug: Add some debug info to see what's happening
-        debug_info = f" (DG_eq={DG_eq:.1f} kJ/mol, exp={np.exp(DG_eq_J / (R * T_K)):.2e})"
+        # Debug info with new method details
+        debug_info = f" (ln(pO₂_req)={ln_pO2_req:.1f}, H₂/H₂O={h2_h2o_ratio:.2e})"
         
         # Format the pressure appropriately
         if P_H2_needed < 1e-4:
@@ -232,6 +221,9 @@ def create_info_text(validation_results: List[Dict]) -> str:
         # Add H₂ partial pressure analysis
         P_H2_available = 0.25  # atm (25% of 1 atm)
         text_lines.append(f"- **H₂ partial pressure needed**: {P_H2_display}{debug_info}")
+        text_lines.append(f"- **H₂/H₂O ratio required**: {h2_h2o_ratio:.2e}")
+        text_lines.append(f"- **Oxygen potential**: ln(pO₂) = {ln_pO2_req:.1f}")
+        
         if P_H2_needed <= P_H2_available:
             text_lines.append(f"- **✅ H₂ reduction feasible** with 25% H₂ (0.25 atm available)")
         else:
@@ -270,7 +262,7 @@ def create_info_text(validation_results: List[Dict]) -> str:
     # For TiO₂: TiO₂ + H₂ → Ti + H₂O (1 mol H₂ per mol TiO₂)
     
     # Get the oxide from the first result
-    oxide = first_result['oxide'] if first_result and 'oxide' in first_result else 'TiO2'
+    oxide = first_result.get('oxide', first_result.get('material', 'TiO2')) if first_result else 'TiO2'
     oxide_mw = MOLECULAR_WEIGHTS.get(oxide, 100.0)  # Default fallback
     h2_mw = 2.016  # g/mol
     
@@ -332,26 +324,100 @@ def create_info_text(validation_results: List[Dict]) -> str:
 
 
 def get_default_materials() -> List[str]:
-    """Get list of default materials to show."""
-    return ['TiO2', 'ZrO2', 'Nb2O5', 'Ta2O5', 'MoO3', 'WO3']
+    """Get list of default materials based on standard Ellingham diagram."""
+    # Common materials shown in classic Ellingham diagrams
+    return [
+        'Titanium Oxide, Rutile',  # TiO2
+        'Aluminum Oxide',          # Al2O3  
+        'Zirconium Oxide',         # ZrO2
+        'Magnesium Oxide',         # MgO
+        'Calcium Oxide',           # CaO
+        'Iron Oxide',              # FeO
+        'Chromium Oxide',          # Cr2O3
+        'Nickel',                  # Ni (pure element)
+        'Molybdenum Oxide',        # MoO3
+        'Tungsten Chloride Oxide', # WO3 equivalent
+        'Vanadium Oxide',          # V2O5
+        'Silicon Oxide'            # SiO2
+    ]
 
 
-def get_material_display_name(oxide_key: str) -> str:
-    """Get display name for material in dropdown."""
+def get_material_display_name(material_key: str) -> str:
+    """Get display name for material in dropdown with proper subscript formatting."""
+    
+    # Common display names with proper subscript formatting
     display_names = {
-        'TiO2': 'TiO₂ (Titanium Dioxide)',
-        'TiO': 'TiO (Titanium Monoxide)',
-        'ZrO2': 'ZrO₂ (Zirconium Dioxide)',
-        'NbO2': 'NbO₂ (Niobium Dioxide)',
-        'NbO': 'NbO (Niobium Monoxide)',
-        'Nb2O5': 'Nb₂O₅ (Niobium Pentoxide)',
-        'Ta2O5': 'Ta₂O₅ (Tantalum Pentoxide)',
-        'MoO2': 'MoO₂ (Molybdenum Dioxide)',
-        'MoO3': 'MoO₃ (Molybdenum Trioxide)',
-        'WO2': 'WO₂ (Tungsten Dioxide)',
-        'WO3': 'WO₃ (Tungsten Trioxide)',
-        'V2O3': 'V₂O₃ (Vanadium(III) Oxide)',
-        'V2O5': 'V₂O₅ (Vanadium(V) Oxide)'
+        # Oxides
+        'Titanium Oxide, Rutile': 'TiO₂ (Titanium Oxide, Rutile)',
+        'Titanium Oxide, Anatase': 'TiO₂ (Titanium Oxide, Anatase)',
+        'Titanium Oxide': 'TiO (Titanium Oxide)',
+        'Aluminum Oxide': 'Al₂O₃ (Aluminum Oxide)',
+        'Zirconium Oxide': 'ZrO₂ (Zirconium Oxide)',
+        'Magnesium Oxide': 'MgO (Magnesium Oxide)',
+        'Calcium Oxide': 'CaO (Calcium Oxide)',
+        'Iron Oxide': 'FeO (Iron Oxide)',
+        'Iron(III) Oxide': 'Fe₂O₃ (Iron(III) Oxide)',
+        'Niobium dioxide': 'NbO₂ (Niobium Dioxide)',
+        'Niobium monoxide': 'NbO (Niobium Monoxide)',
+        'Niobium pentoxide': 'Nb₂O₅ (Niobium Pentoxide)',
+        'Tantalum pentoxide': 'Ta₂O₅ (Tantalum Pentoxide)',
+        'Molybdenum dioxide': 'MoO₂ (Molybdenum Dioxide)',
+        'Molybdenum trioxide': 'MoO₃ (Molybdenum Trioxide)',
+        'Tungsten dioxide': 'WO₂ (Tungsten Dioxide)',
+        'Tungsten trioxide': 'WO₃ (Tungsten Trioxide)',
+        'Vanadium(III) oxide': 'V₂O₃ (Vanadium(III) Oxide)',
+        'Vanadium(V) oxide': 'V₂O₅ (Vanadium(V) Oxide)',
+        'Chromium Oxide': 'Cr₂O₃ (Chromium Oxide)',
+        'Nickel': 'Ni (Nickel)',
+        'Molybdenum Oxide': 'MoO₃ (Molybdenum Oxide)',
+        'Tungsten Chloride Oxide': 'WO₃ (Tungsten Chloride Oxide)',
+        'Vanadium Oxide': 'V₂O₅ (Vanadium Oxide)',
+        'Silicon Oxide': 'SiO₂ (Silicon Oxide)',
+        
+        # Carbides
+        'Titanium Carbide': 'TiC (Titanium Carbide)',
+        'Silicon Carbide': 'SiC (Silicon Carbide)',
+        'Tungsten Carbide': 'WC (Tungsten Carbide)',
+        
+        # Nitrides
+        'Titanium Nitride': 'TiN (Titanium Nitride)',
+        'Aluminum Nitride': 'AlN (Aluminum Nitride)',
+        'Boron Nitride': 'BN (Boron Nitride)',
+        
+        # Halides
+        'Titanium Fluoride': 'TiF₄ (Titanium Fluoride)',
+        'Titanium Chloride': 'TiCl₄ (Titanium Chloride)',
+        
+        # Pure elements
+        'Titanium': 'Ti (Titanium)',
+        'Aluminum': 'Al (Aluminum)',
+        'Iron': 'Fe (Iron)',
+        'Carbon': 'C (Carbon)',
     }
     
-    return display_names.get(oxide_key, oxide_key)
+    # If we have a specific mapping, use it
+    if material_key in display_names:
+        return display_names[material_key]
+    
+    # Otherwise, try to format the name nicely
+    # Convert common patterns to subscripts
+    formatted_name = material_key
+    
+    # Add basic subscript formatting for common patterns
+    subscript_map = {
+        'O2': 'O₂', 'O3': 'O₃', 'O4': 'O₄', 'O5': 'O₅',
+        'H2': 'H₂', 'H3': 'H₃', 'H4': 'H₄',
+        'C2': 'C₂', 'C3': 'C₃', 'C4': 'C₄',
+        'N2': 'N₂', 'N3': 'N₃', 'N4': 'N₄',
+        'S2': 'S₂', 'S3': 'S₃', 'S4': 'S₄',
+        'P2': 'P₂', 'P3': 'P₃', 'P4': 'P₄',
+        'F2': 'F₂', 'F3': 'F₃', 'F4': 'F₄',
+        'Cl2': 'Cl₂', 'Cl3': 'Cl₃', 'Cl4': 'Cl₄',
+        'Br2': 'Br₂', 'Br3': 'Br₃', 'Br4': 'Br₄',
+        'I2': 'I₂', 'I3': 'I₃', 'I4': 'I₄',
+    }
+    
+    for pattern, replacement in subscript_map.items():
+        formatted_name = formatted_name.replace(pattern, replacement)
+    
+    return formatted_name

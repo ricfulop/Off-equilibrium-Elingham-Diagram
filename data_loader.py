@@ -17,17 +17,19 @@ warnings.filterwarnings('ignore')
 class JANAFDataLoader:
     """Loads and processes JANAF thermodynamic data for Ellingham diagrams."""
     
-    def __init__(self, data_file: str = DATA_FILE):
+    def __init__(self, data_file: str = "janaf_ellingham_tables.pkl"):
         self.data_file = data_file
         self.raw_data = None
         self.processed_data = {}
         self.oxide_species = []
+        self.categories_data = {}
         
-    def load_raw_data(self) -> pd.DataFrame:
-        """Load raw data from pickle file with compatibility handling."""
+    def load_raw_data(self) -> Dict:
+        """Load pre-computed JANAF data from pickle file."""
         try:
-            self.raw_data = pd.read_pickle(self.data_file)
-            print(f"Successfully loaded data: {self.raw_data.shape}")
+            with open(self.data_file, 'rb') as f:
+                self.raw_data = pickle.load(f)
+            print(f"Successfully loaded comprehensive JANAF database: {self.raw_data['metadata']['total_compounds']} compounds")
             return self.raw_data
         except Exception as e:
             print(f"Error loading pickle file: {e}")
@@ -122,13 +124,24 @@ class JANAFDataLoader:
             print(f"Warning: No data found for {species_name}")
             return {}
             
-        # Clean data - try both Gibbs free energy columns
+        # Clean data - try both Gibbs free energy columns, then calculate from H and S
         if species_data['delta_G_f_kJ_per_mol'].notna().any():
             species_data = species_data.dropna(subset=['delta_G_f_kJ_per_mol'])
             delta_f_G_col = 'delta_G_f_kJ_per_mol'
         elif species_data['delta_f_G_kJ_per_mol'].notna().any():
             species_data = species_data.dropna(subset=['delta_f_G_kJ_per_mol'])
             delta_f_G_col = 'delta_f_G_kJ_per_mol'
+        elif (species_data['delta_f_H_kJ_per_mol'].notna().any() and 
+              species_data['S_J_per_molK'].notna().any()):
+            # Calculate Gibbs free energy from enthalpy and entropy: G = H - TS
+            species_data = species_data.dropna(subset=['delta_f_H_kJ_per_mol', 'S_J_per_molK'])
+            # Calculate delta_f_G = delta_f_H - T * S (convert S from J/mol·K to kJ/mol·K)
+            species_data['delta_f_G_kJ_per_mol'] = (
+                species_data['delta_f_H_kJ_per_mol'] - 
+                species_data['T_K'] * species_data['S_J_per_molK'] / 1000
+            )
+            delta_f_G_col = 'delta_f_G_kJ_per_mol'
+            print(f"✓ Calculated Gibbs free energy from H and S for {species_name}")
         else:
             print(f"Warning: No Gibbs free energy data found for {species_name}")
             return {}
@@ -187,6 +200,71 @@ class JANAFDataLoader:
         
         return processed_data
     
+    def interpolate_DG(self, material_name: str, temperature_K: float) -> float:
+        """
+        Interpolate Gibbs free energy at given temperature using polynomial coefficients.
+        
+        Args:
+            material_name: Name of the material
+            temperature_K: Temperature in Kelvin (can be array or scalar)
+            
+        Returns:
+            Gibbs free energy in kJ/mol O₂
+        """
+        material_data = self.get_material_data(material_name)
+        if not material_data:
+            return 0.0
+        
+        thermo_data = material_data.get('thermo_data', {})
+        gibbs_data = thermo_data.get('gibbs_data', {})
+        
+        if not gibbs_data:
+            return 0.0
+        
+        # Check if we have polynomial coefficients
+        fit_coeffs = gibbs_data.get('fit_coefficients')
+        if fit_coeffs:
+            A = fit_coeffs['A']
+            B = fit_coeffs['B'] 
+            C = fit_coeffs['C']
+            
+            # Calculate: G(T) = A + B*T + C*T^2
+            if isinstance(temperature_K, np.ndarray):
+                return A + B * temperature_K + C * temperature_K**2
+            else:
+                return A + B * temperature_K + C * temperature_K**2
+        
+        # Fallback to constant value if no coefficients
+        return gibbs_data.get('min_gibbs', 0.0)
+    
+    def get_oxide_data(self, oxide_key: str) -> Optional[Dict]:
+        """
+        Get oxide data for compatibility with ThermodynamicEngine.
+        This method provides compatibility with the existing thermodynamic calculations.
+        
+        Args:
+            oxide_key: Name of the oxide
+            
+        Returns:
+            Dictionary with oxide data including n_electrons and n_oxygen
+        """
+        material_data = self.get_material_data(oxide_key)
+        if not material_data:
+            return None
+        
+        processed_data = self.process_material_for_ellingham(oxide_key)
+        if not processed_data:
+            return None
+        
+        return {
+            'n_electrons': processed_data['fit_params']['n_electrons'],
+            'n_oxygen': processed_data['fit_params']['n_oxygen'],
+            'formula': processed_data.get('formula', ''),
+            'element': processed_data.get('element', ''),
+            'category': processed_data.get('category', '')
+        }
+    
+    
     def process_all_data(self) -> Dict:
         """Process all oxide species and return structured data."""
         if not self.oxide_species:
@@ -238,31 +316,147 @@ class JANAFDataLoader:
         """Get list of available oxide keys."""
         return list(self.processed_data.keys())
     
-    def get_oxide_data(self, oxide_key: str) -> Optional[Dict]:
-        """Get processed data for a specific oxide."""
-        return self.processed_data.get(oxide_key)
+    def get_available_materials(self, category: str = None) -> List[str]:
+        """
+        Get list of available materials, optionally filtered by category.
+        
+        Args:
+            category: Optional category filter ('oxides', 'carbides', 'nitrides', etc.)
+        
+        Returns:
+            List of material names
+        """
+        if self.raw_data is None:
+            self.load_raw_data()
+        
+        if category:
+            if category in self.raw_data:
+                return list(self.raw_data[category].keys())
+            else:
+                return []
+        else:
+            # Return all materials from all categories
+            all_materials = []
+            for cat in ['oxides', 'carbides', 'nitrides', 'halides', 'hydrides', 'sulfides', 'phosphides', 'pure_elements', 'other']:
+                if cat in self.raw_data:
+                    all_materials.extend(list(self.raw_data[cat].keys()))
+            return all_materials
     
-    def interpolate_DG(self, oxide_key: str, T_K: np.ndarray) -> np.ndarray:
+    def get_categories_data(self) -> Dict[str, List[Dict]]:
         """
-        Interpolate Gibbs free energy at given temperatures using fitted polynomial.
+        Get materials organized by category for the UI.
+        
+        Returns:
+            Dictionary with category names as keys and lists of material info as values
         """
-        data = self.get_oxide_data(oxide_key)
-        if data is None:
-            return np.full_like(T_K, np.nan)
+        if self.raw_data is None:
+            self.load_raw_data()
         
-        params = data['fit_params']
-        # DG = A + B*T + C*T^2
-        DG = params['A'] + params['B'] * T_K + params['C'] * T_K**2
+        categories_data = {}
+        for category in ['oxides', 'carbides', 'nitrides', 'halides', 'hydrides', 'sulfides', 'phosphides', 'pure_elements', 'other']:
+            if category in self.raw_data:
+                materials = []
+                for name, data in self.raw_data[category].items():
+                    materials.append({
+                        'name': name,
+                        'formula': data.get('formula', ''),
+                        'element': data.get('element', ''),
+                        'category': category
+                    })
+                categories_data[category] = materials
         
-        return DG
+        return categories_data
+    
+    def get_material_data(self, material_name: str) -> Optional[Dict]:
+        """
+        Get processed data for a specific material from any category.
+        
+        Args:
+            material_name: Name of the material
+        
+        Returns:
+            Dictionary with material data or None if not found
+        """
+        if self.raw_data is None:
+            self.load_raw_data()
+        
+        # Check compound lookup first
+        if 'compound_lookup' in self.raw_data and material_name in self.raw_data['compound_lookup']:
+            return self.raw_data['compound_lookup'][material_name]
+        
+        # Fallback: search all categories
+        for category in ['oxides', 'carbides', 'nitrides', 'halides', 'hydrides', 'sulfides', 'phosphides', 'pure_elements', 'other']:
+            if category in self.raw_data and material_name in self.raw_data[category]:
+                return self.raw_data[category][material_name]
+        
+        return None
+    
+    def process_material_for_ellingham(self, material_name: str) -> Optional[Dict]:
+        """
+        Process material data for Ellingham diagram calculations.
+        Converts raw thermodynamic data to Ellingham-compatible format.
+        
+        Args:
+            material_name: Name of the material
+        
+        Returns:
+            Dictionary with processed Ellingham data or None if processing fails
+        """
+        material_data = self.get_material_data(material_name)
+        if not material_data:
+            return None
+        
+        thermo_data = material_data.get('thermo_data', {})
+        if not thermo_data:
+            return None
+        
+        # Extract temperature and Gibbs free energy data
+        if 'gibbs_data' not in thermo_data:
+            return None
+        
+        gibbs_data = thermo_data['gibbs_data']
+        
+        # Extract polynomial coefficients from thermodynamic data
+        fit_coeffs = gibbs_data.get('fit_coefficients')
+        
+        if fit_coeffs:
+            # Use actual polynomial coefficients from thermodynamic data
+            fit_params = {
+                'A': fit_coeffs['A'],
+                'B': fit_coeffs['B'],
+                'C': fit_coeffs['C'],
+                'n_electrons': 4,  # Default assumption - could be improved
+                'n_oxygen': 2     # Default assumption - could be improved
+            }
+        else:
+            # Fallback to simplified approach if no coefficients available
+            fit_params = {
+                'A': gibbs_data.get('min_gibbs', 0),
+                'B': 0.0,  # No temperature dependence
+                'C': 0.0,
+                'n_electrons': 4,  # Default assumption
+                'n_oxygen': 2     # Default assumption
+            }
+        
+        processed_data = {
+            'species_name': material_name,
+            'formula': material_data.get('formula', ''),
+            'element': material_data.get('element', ''),
+            'category': material_data.get('category', ''),
+            'fit_params': fit_params,
+            'n_electrons': fit_params['n_electrons'],
+            'n_oxygen': fit_params['n_oxygen'],
+            'temperature_range': thermo_data.get('temperature_range', {}),
+            'data_points': thermo_data.get('data_points', 0)
+        }
+        
+        return processed_data
 
 
 def load_janaf_data() -> JANAFDataLoader:
     """Convenience function to load and process all JANAF data."""
     loader = JANAFDataLoader()
     loader.load_raw_data()
-    loader.identify_oxide_species()
-    loader.process_all_data()
     return loader
 
 
