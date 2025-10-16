@@ -259,16 +259,23 @@ def toggle_gas_scales_collapse(n_clicks, is_open):
 
 @app.callback(
     Output('material-dropdown', 'options'),
-    Input('material-category-tabs', 'active_tab')
+    [Input('material-category-tabs', 'active_tab'),
+     Input('metal-group-dropdown', 'value'),
+     Input('material-grouping-mode', 'value')]
 )
-def update_material_options(active_tab):
-    """Update dropdown options based on selected category tab."""
-    if active_tab is None:
-        active_tab = 'oxides'
+def update_material_options(active_tab, selected_metal, grouping_mode):
+    """Update dropdown options based on selected category tab or metal grouping."""
     
     try:
-        # Get materials for the selected category
-        materials = data_loader.get_available_materials(category=active_tab)
+        if grouping_mode == 'metal' and selected_metal:
+            # Metal grouping mode
+            from material_selector import get_materials_by_metal
+            materials = get_materials_by_metal(categories_data, selected_metal)
+        else:
+            # Category grouping mode
+            if active_tab is None:
+                active_tab = 'oxides'
+            materials = data_loader.get_available_materials(category=active_tab)
         
         # Create options with proper formatting
         options = []
@@ -299,6 +306,44 @@ def toggle_custom_radius(radius_value):
         return {'display': 'block'}
     else:
         return {'display': 'none'}
+
+
+@app.callback(
+    [Output('category-tabs-container', 'style'),
+     Output('metal-group-container', 'style'),
+     Output('metal-group-dropdown', 'options')],
+    [Input('material-grouping-mode', 'value')]
+)
+def toggle_grouping_mode(grouping_mode):
+    """Toggle between category tabs and metal grouping based on mode selection."""
+    
+    if grouping_mode == 'metal':
+        # Show metal grouping, hide category tabs
+        category_style = {'display': 'none'}
+        metal_style = {'display': 'block'}
+        
+        # Get metal options
+        from material_selector import create_metal_group_options
+        metal_options = create_metal_group_options(categories_data)
+        
+    else:
+        # Show category tabs, hide metal grouping
+        category_style = {'display': 'block'}
+        metal_style = {'display': 'none'}
+        metal_options = []
+    
+    return category_style, metal_style, metal_options
+
+
+@app.callback(
+    Output('material-dropdown', 'value', allow_duplicate=True),
+    [Input('material-grouping-mode', 'value')],
+    [State('material-dropdown', 'value')],
+    prevent_initial_call=True
+)
+def preserve_material_selection(grouping_mode, current_selection):
+    """Preserve material selection when switching grouping modes."""
+    return current_selection
 
 
 @app.callback(
@@ -390,9 +435,16 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
                         smoothing=0.3
                     ),
                     hovertemplate=f"<b>{material}</b><br>" +
+                                 f"Formula: {formula}<br>" +
+                                 f"Category: {category.capitalize()}<br>" +
+                                 f"Element: {element}<br>" +
                                  "Temperature: %{x:.0f}°C<br>" +
-                                 f"ΔG°: %{{y:.1f}} {unit}<extra></extra>",
-                    showlegend=True
+                                 f"ΔG°: %{{y:.1f}} {unit}<br>" +
+                                 f"Field: {field_MV_m:.1f} MV/m<br>" +
+                                 f"Radius: {r_um:.1f} μm<extra></extra>",
+                    showlegend=True,
+                    legendgroup=f"material_{material}",
+                    legendgrouptitle_text=material
                 ),
                 secondary_y=False
             )
@@ -412,9 +464,16 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
                         smoothing=0.3
                     ),
                     hovertemplate=f"<b>{material}</b><br>" +
+                                 f"Formula: {formula}<br>" +
+                                 f"Category: {category.capitalize()}<br>" +
+                                 f"Element: {element}<br>" +
                                  "Temperature: %{x:.0f}°C<br>" +
-                                 f"ΔG_eff: %{{y:.1f}} {unit}<extra></extra>",
-                    showlegend=True
+                                 f"ΔG_eff: %{{y:.1f}} {unit}<br>" +
+                                 f"Field: {field_MV_m:.1f} MV/m<br>" +
+                                 f"Radius: {r_um:.1f} μm<extra></extra>",
+                    showlegend=True,
+                    legendgroup=f"material_{material}",
+                    legendgrouptitle_text=material
                 ),
                 secondary_y=False
             )
@@ -482,7 +541,8 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
                                          f"{gas_info['description']}<br>" +
                                          f"Based on: {gas_ratio_label_suffix.strip(' ()')}<br>" +
                                          "Temperature: %{x:.0f}°C<br>" +
-                                         "Value: %{y:.2f}<extra></extra>",
+                                         "Log Value: %{y:.2f}<br>" +
+                                         f"Actual Ratio: {10**all_ratios[gas_key][0]:.1e}<extra></extra>",
                             showlegend=True,
                             legendgroup='gas_ratios'
                         ),
@@ -575,7 +635,11 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
             font=dict(size=11, family="Arial, sans-serif"),
             bgcolor='rgba(255,255,255,0.8)',
             bordercolor='rgba(0,0,0,0.2)',
-            borderwidth=1
+            borderwidth=1,
+            # Enhanced legend grouping
+            groupclick="togglegroup",   # Clicking a group toggles the group
+            itemclick="toggle",         # Clicking an item toggles it
+            itemdoubleclick="toggleothers"  # Double-click toggles others
         ),
         margin=dict(r=200, t=80, b=60, l=80),
         plot_bgcolor='white',
