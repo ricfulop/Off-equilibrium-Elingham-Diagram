@@ -236,13 +236,23 @@ def export_data_to_csv(oxide_data: Dict, filename: str) -> str:
     return output.getvalue()
 
 
-def create_info_text(validation_results: List[Dict]) -> str:
+def create_info_text(validation_results: List[Dict], gas_composition: str = 'N2_H2_25') -> str:
     """Create formatted info text for display."""
     if not validation_results:
         return "No data to display"
     
+    # Import gas composition presets
+    from config import GAS_COMPOSITION_PRESETS
+    
+    # Get gas composition data
+    gas_data = GAS_COMPOSITION_PRESETS.get(gas_composition, GAS_COMPOSITION_PRESETS['N2_H2_25'])
+    h2_fraction = gas_data['h2_fraction']
+    carrier_gas = gas_data['carrier_gas']
+    carrier_fraction = gas_data['carrier_fraction']
+    
     text_lines = []
     text_lines.append("**Thermodynamic Analysis**")
+    text_lines.append(f"*Gas Composition: {gas_data['name']}*")
     text_lines.append("")
     
     for result in validation_results:
@@ -279,17 +289,17 @@ def create_info_text(validation_results: List[Dict]) -> str:
         text_lines.append(f"- ΔG_eff (off-equilibrium): {DG_eff:.1f} kJ/mol O₂")
         text_lines.append(f"- Reduction feasibility: {feasibility}")
         
-        # Add H₂ partial pressure analysis
-        P_H2_available = 0.25  # atm (25% of 1 atm)
+        # Add H₂ partial pressure analysis with selected gas composition
+        P_H2_available = h2_fraction  # Use selected H₂ fraction
         text_lines.append(f"- **H₂ partial pressure needed**: {P_H2_display}{debug_info}")
         text_lines.append(f"- **H₂/H₂O ratio required**: {h2_h2o_ratio:.2e}")
         text_lines.append(f"- **Oxygen potential**: ln(pO₂) = {ln_pO2_req:.1f}")
         
         if P_H2_needed <= P_H2_available:
-            text_lines.append(f"- **✅ H₂ reduction feasible** with 25% H₂ (0.25 atm available)")
+            text_lines.append(f"- **✅ H₂ reduction feasible** with {h2_fraction*100:.0f}% H₂ ({P_H2_available:.2f} atm available)")
         else:
             H2_percent_needed = (P_H2_needed / P_H2_available) * 100
-            text_lines.append(f"- **❌ H₂ reduction requires {H2_percent_needed:.1f}% H₂** (more than 25% available)")
+            text_lines.append(f"- **❌ H₂ reduction requires {H2_percent_needed:.1f}% H₂** (more than {h2_fraction*100:.0f}% available)")
         
         text_lines.append("")
     
@@ -351,21 +361,20 @@ def create_info_text(validation_results: List[Dict]) -> str:
     text_lines.append(f"- Molar ratio: {moles_h2_per_kg:.2f} mol H₂/kg oxide")
     text_lines.append("")
     
-    text_lines.append(f"**Processing Rate Analysis:**")
+    text_lines.append(f"**Processing Rate Analysis ({gas_data['name']}):**")
     for rate in PROCESSING_RATES:
         h2_flow_rate = rate * mass_h2_per_kg  # kg H₂/hr
         h2_volumetric_flow = h2_flow_rate * 22.4 / h2_mw  # m³/hr (at STP)
         
-        # Calculate required H₂ concentration in feed gas
-        # Assuming 25% H₂ in feed gas
-        total_gas_flow = h2_volumetric_flow / 0.25  # m³/hr
-        n2_flow = total_gas_flow - h2_volumetric_flow  # m³/hr
+        # Calculate required gas flows with selected composition
+        total_gas_flow = h2_volumetric_flow / h2_fraction  # m³/hr
+        carrier_flow = total_gas_flow - h2_volumetric_flow  # m³/hr
         
         text_lines.append(f"- **{rate} kg/hr processing:**")
         text_lines.append(f"  - H₂ consumption: {h2_flow_rate:.2f} kg H₂/hr")
         text_lines.append(f"  - H₂ volumetric flow: {h2_volumetric_flow:.1f} m³/hr")
         text_lines.append(f"  - Total gas flow: {total_gas_flow:.1f} m³/hr")
-        text_lines.append(f"  - N₂ flow: {n2_flow:.1f} m³/hr")
+        text_lines.append(f"  - {carrier_gas} flow: {carrier_flow:.1f} m³/hr")
         text_lines.append("")
     
     # Add reduction kinetics analysis

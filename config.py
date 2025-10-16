@@ -114,3 +114,24 @@ MOLECULAR_WEIGHTS = {
 
 # Processing rates to analyze (kg/hr)
 PROCESSING_RATES = [1, 10, 100, 1000]
+
+# Gas composition presets
+GAS_COMPOSITION_PRESETS = {
+    'N2_H2_25': {
+        'name': 'N₂ 75% / H₂ 25%',
+        'h2_fraction': 0.25,
+        'carrier_gas': 'N₂',
+        'carrier_fraction': 0.75,
+        'description': 'Standard industrial mix'
+    },
+    'Ar_H2_5': {
+        'name': 'Ar 95% / H₂ 5%',
+        'h2_fraction': 0.05,
+        'carrier_gas': 'Ar',
+        'carrier_fraction': 0.95,
+        'description': 'Low H₂ concentration for testing'
+    }
+}
+
+# Default gas composition
+DEFAULT_GAS_COMPOSITION = 'N2_H2_25'

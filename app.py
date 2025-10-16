@@ -134,6 +134,21 @@ app.layout = dbc.Container([
                     )
                 ], className="control-section"),
                 
+                # Gas Composition
+                html.Div([
+                    html.H6("Gas Composition"),
+                    dbc.RadioItems(
+                        id='gas-composition-radio',
+                        options=[
+                            {"label": "N₂ 75% / H₂ 25%", "value": "N2_H2_25"},
+                            {"label": "Ar 95% / H₂ 5%", "value": "Ar_H2_5"}
+                        ],
+                        value="N2_H2_25",
+                        inline=True
+                    ),
+                    html.Small("Select gas composition for feasibility analysis", className="text-muted")
+                ], className="control-section"),
+                
                 # Temperature Range
                 html.Div([
                     html.H6("Temperature Range"),
@@ -355,9 +370,10 @@ def preserve_material_selection(grouping_mode, current_selection):
      Input('temp-range-slider', 'value'),
      Input('display-options', 'value'),
      Input('comparison-mode', 'value'),
-     Input('gas-scale-options', 'value')]  # New input
+     Input('gas-scale-options', 'value'),
+     Input('gas-composition-radio', 'value')]  # New input
 )
-def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, display_options, comparison_mode, gas_scales):
+def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, display_options, comparison_mode, gas_scales, gas_composition):
     """Update the Ellingham diagram plot."""
     if not materials:
         return go.Figure()
@@ -668,9 +684,10 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
      Input('field-slider', 'value'),
      Input('radius-radio', 'value'),
      Input('radius-custom', 'value'),
-     Input('temp-range-slider', 'value')]
+     Input('temp-range-slider', 'value'),
+     Input('gas-composition-radio', 'value')]  # New input
 )
-def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_range):
+def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_range, gas_composition):
     """Update the info panel with thermodynamic analysis."""
     if not materials:
         return "Select materials to see thermodynamic analysis."
@@ -706,6 +723,11 @@ def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_r
                 DG_eq = processed_data['fit_params']['A']  # Simplified
                 DG_eff = DG_eq - processed_data['fit_params']['n_electrons'] * 96485 * E_V_m * r_m / 1000
                 
+                # Calculate proper gas ratios using thermodynamic engine
+                ln_pO2_req = thermo_engine.calc_oxygen_potential_required(material, np.array([T_K]), E_V_m, r_m)[0]
+                h2_h2o_ratio = thermo_engine.calc_h2_h2o_ratio_required(material, np.array([T_K]), E_V_m, r_m)[0]
+                p_h2_req = thermo_engine.calc_h2_partial_pressure_required(material, np.array([T_K]), E_V_m, r_m)[0]
+                
                 validation = {
                     'material': material,
                     'oxide': material,  # For compatibility with existing code
@@ -723,14 +745,14 @@ def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_r
                     'n_electrons': processed_data['fit_params']['n_electrons'],
                     'n_oxygen': processed_data['fit_params']['n_oxygen'],
                     'feasibility': ('Feasible', 'success'),  # Simplified feasibility
-                    'p_h2_req_atm': 0.0,  # Placeholder - would need proper calculation
-                    'h2_h2o_ratio_req': 0.0,  # Placeholder
-                    'ln_pO2_req': 0.0  # Placeholder
+                    'p_h2_req_atm': p_h2_req,  # Now using proper calculation
+                    'h2_h2o_ratio_req': h2_h2o_ratio,  # Now using proper calculation
+                    'ln_pO2_req': ln_pO2_req  # Now using proper calculation
                 }
                 validation_results.append(validation)
     
     # Create info text
-    info_text = create_info_text(validation_results)
+    info_text = create_info_text(validation_results, gas_composition)
     
     return dcc.Markdown(info_text)
 
@@ -768,9 +790,6 @@ def export_data(n_clicks, materials, field_MV_m, radius_radio, radius_custom, te
     export_data = {}
     
     for material in materials:
-        if material not in available_oxides:
-            continue
-            
         DG_eq = thermo_engine.calc_equilibrium_DG(material, T_K)
         DG_eff = thermo_engine.calc_off_equilibrium_DG(material, T_K, E_V_m, r_m)
         
