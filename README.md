@@ -19,6 +19,9 @@ This application implements the novel **off-equilibrium thermodynamics model** f
 - **Comprehensive Database**: 710 compounds with valid thermodynamic data across 9 categories
 - **Temperature-Dependent Calculations**: Proper polynomial coefficients (A + B×T + C×T²) for realistic sloping Ellingham lines
 - **Multi-Compound Support**: Oxides, carbides, nitrides, halides, hydrides, sulfides, phosphides, pure elements, and other compounds
+- **Multi-Compound Normalization**: Compare different compound types on the same diagram with automatic normalization
+- **Enhanced Color Scheme**: Metal-grouped color families for better visual distinction
+- **Economic Analysis**: Real-time cost-effectiveness analysis with commodity price integration
 - **Category-Based Selection**: Organized material selection with searchable dropdowns by compound type
 - **Interactive Material Selection**: Choose from available compounds with proper chemical formula formatting
 - **Electric Field Control**: Adjust field strength from 0.1 to 5.0 MV/m
@@ -28,6 +31,31 @@ This application implements the novel **off-equilibrium thermodynamics model** f
 - **Gas Ratio Scales**: Display H₂/H₂O and CO/CO₂ ratios for reduction analysis
 - **Real-time Analysis**: Instant thermodynamic feasibility assessment
 - **Data Export**: Export calculated data for further analysis
+
+## Recent Updates (v1.4.0+)
+
+### Multi-Compound Ellingham Diagrams
+The application now supports plotting multiple compound types (oxides, nitrides, carbides) on the same diagram with intelligent normalization:
+
+- **Automatic Normalization**: Single compound type uses native units (kJ/mol O₂, N₂, or C)
+- **Metal-Based Normalization**: Mixed compound types normalize to kJ/mol Metal for comparison
+- **Dynamic Y-Axis**: Axis labels automatically adjust based on selected compounds
+
+### Enhanced Visual Design
+- **Metal-Grouped Colors**: Each metal family has distinct color palette (Ti=blue, Al=orange, Fe=brown, etc.)
+- **Category Shading**: Different shades within metal families for compound types
+- **Improved Accessibility**: Better color distinction for colorblind users
+
+### Economic Analysis
+- **Real-Time Cost Analysis**: Calculate cost-effectiveness of reduction processes
+- **Commodity Price Integration**: Built-in database of metal and compound prices
+- **Energy Cost Estimation**: Thermodynamic-based energy consumption calculations
+- **Profit Margin Analysis**: Gross margin and profitability calculations
+
+### Database Expansion
+- **710 Compounds**: Comprehensive JANAF database integration
+- **9 Categories**: Oxides, carbides, nitrides, halides, hydrides, sulfides, phosphides, pure elements, other
+- **Scientific Accuracy**: Only verified JANAF thermodynamic data included
 
 ## Scientific Background
 

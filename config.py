@@ -33,12 +33,49 @@ DEFAULT_TEMP_RANGE = [300, 2400]  # K
 TEMP_MARKERS = [800, 1000, 1200]  # °C for annotations
 GAS_RATIO_TEMPS = [1000, 1200, 1500]  # °C for gas ratio scales
 
-# Color palette by periodic table group
+# Color palette by metal element with grouped families
 COLOR_PALETTE = {
-    'Group4': ['#1f77b4', '#aec7e8'],  # Ti, Zr - Blue shades
-    'Group5': ['#2ca02c', '#98df8a'],  # Nb, Ta, V - Green shades
-    'Group6': ['#d62728', '#ff9896'],  # Mo, W - Red shades
-    'Other': ['#ff7f0e', '#ffbb78'],    # Other metals - Orange shades
+    # Group 4 metals (Ti, Zr, Hf) - Blue family
+    'Ti': ['#0d47a1', '#1976d2', '#42a5f5', '#90caf9'],
+    'Zr': ['#1a237e', '#303f9f', '#5c6bc0', '#9fa8da'],
+    'Hf': ['#004d40', '#00695c', '#00897b', '#4db6ac'],
+    
+    # Group 5 metals (V, Nb, Ta) - Green family  
+    'V': ['#1b5e20', '#388e3c', '#66bb6a', '#a5d6a7'],
+    'Nb': ['#33691e', '#689f38', '#9ccc65', '#c5e1a5'],
+    'Ta': ['#827717', '#afb42b', '#d4e157', '#e6ee9c'],
+    
+    # Group 6 metals (Cr, Mo, W) - Red/Purple family
+    'Cr': ['#b71c1c', '#d32f2f', '#e57373', '#ef9a9a'],
+    'Mo': ['#880e4f', '#c2185b', '#f06292', '#f48fb1'],
+    'W': ['#4a148c', '#7b1fa2', '#ba68c8', '#e1bee7'],
+    
+    # Aluminum - Orange family
+    'Al': ['#e65100', '#f57c00', '#ffa726', '#ffcc80'],
+    
+    # Iron group - Brown family
+    'Fe': ['#3e2723', '#5d4037', '#8d6e63', '#bcaaa4'],
+    'Ni': ['#4e342e', '#6d4c41', '#a1887f', '#d7ccc8'],
+    'Co': ['#263238', '#455a64', '#78909c', '#b0bec5'],
+    
+    # Magnesium/Calcium - Cyan family
+    'Mg': ['#006064', '#00838f', '#00acc1', '#4dd0e1'],
+    'Ca': ['#01579b', '#0277bd', '#039be5', '#4fc3f7'],
+    
+    # Silicon - Grey family
+    'Si': ['#424242', '#616161', '#9e9e9e', '#bdbdbd'],
+    
+    # Additional metals
+    'Cu': ['#bf360c', '#d84315', '#ff5722', '#ff8a65'],
+    'Zn': ['#37474f', '#455a64', '#607d8b', '#90a4ae'],
+    'Pb': ['#3e2723', '#5d4037', '#8d6e63', '#bcaaa4'],
+    'Sn': ['#795548', '#8d6e63', '#a1887f', '#d7ccc8'],
+    'Li': ['#1a237e', '#303f9f', '#5c6bc0', '#9fa8da'],
+    'Na': ['#bf360c', '#d84315', '#ff5722', '#ff8a65'],
+    'K': ['#4a148c', '#7b1fa2', '#ba68c8', '#e1bee7'],
+    
+    # Default - Amber family
+    'Other': ['#ff6f00', '#ff8f00', '#ffa726', '#ffb74d']
 }
 
 # Line styles for off-equilibrium curves

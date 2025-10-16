@@ -37,13 +37,74 @@ def m_to_um(r_m: float) -> float:
     return r_m * 1e6
 
 
-def get_color_for_oxide(oxide_key: str, group: str) -> str:
-    """Get color for oxide based on periodic table group."""
-    group_colors = COLOR_PALETTE.get(group, COLOR_PALETTE['Other'])
+def get_color_for_material(material_name: str, formula: str, category: str) -> str:
+    """Get color for material based on metal element.
     
-    # Simple hash-based color selection for multiple oxides in same group
-    hash_val = hash(oxide_key) % len(group_colors)
-    return group_colors[hash_val]
+    Uses metal-grouped color families for better visual distinction.
+    """
+    # Extract metal element from formula
+    metal = extract_metal_element(formula)
+    
+    if metal in COLOR_PALETTE:
+        colors = COLOR_PALETTE[metal]
+    else:
+        colors = COLOR_PALETTE['Other']
+    
+    # Use category to select shade within color family
+    category_index = {
+        'oxides': 0,
+        'nitrides': 1, 
+        'carbides': 2,
+        'halides': 3,
+        'hydrides': 0,  # Use same as oxides
+        'sulfides': 1,  # Use same as nitrides
+        'phosphides': 2,  # Use same as carbides
+        'pure_elements': 3,
+        'other': 0
+    }.get(category, 0)
+    
+    return colors[min(category_index, len(colors)-1)]
+
+def extract_metal_element(formula: str) -> str:
+    """Extract metal element from chemical formula."""
+    import re
+    
+    # For formulas like "O2Ti", "N2Ti", "CTi", we want the metal (Ti)
+    # For formulas like "TiO2", "TiN", "TiC", we want the metal (Ti)
+    
+    # First try to find a metal at the end (for formulas like O2Ti, N2Ti, CTi)
+    metal_at_end = re.search(r'([A-Z][a-z]?)$', formula)
+    if metal_at_end:
+        element = metal_at_end.group(1)
+        # Check if it's a metal (not O, N, C, H, S, P, F, Cl, Br, I)
+        non_metals = {'O', 'N', 'C', 'H', 'S', 'P', 'F', 'Cl', 'Br', 'I'}
+        if element not in non_metals:
+            return element
+    
+    # If not found at end, try to find metal at the beginning (for formulas like TiO2, TiN, TiC)
+    metal_at_start = re.match(r'^([A-Z][a-z]?)', formula)
+    if metal_at_start:
+        element = metal_at_start.group(1)
+        non_metals = {'O', 'N', 'C', 'H', 'S', 'P', 'F', 'Cl', 'Br', 'I'}
+        if element not in non_metals:
+            return element
+    
+    # For complex formulas like "O3Al2", find all elements and pick the metal
+    all_elements = re.findall(r'([A-Z][a-z]?)', formula)
+    non_metals = {'O', 'N', 'C', 'H', 'S', 'P', 'F', 'Cl', 'Br', 'I'}
+    for element in all_elements:
+        if element not in non_metals:
+            return element
+    
+    # Fallback: return the first element found
+    first_element = re.match(r'^([A-Z][a-z]?)', formula)
+    return first_element.group(1) if first_element else 'Other'
+
+def get_color_for_oxide(oxide_key: str, group: str) -> str:
+    """Get color for oxide based on periodic table group (legacy compatibility)."""
+    # For backward compatibility, try to extract metal from oxide_key
+    metal = extract_metal_element(oxide_key)
+    return get_color_for_material(oxide_key, oxide_key, 'oxides')
 
 
 def get_line_style(line_type: str) -> str:

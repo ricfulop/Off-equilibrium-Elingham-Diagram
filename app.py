@@ -21,7 +21,7 @@ from thermo_calcs import ThermodynamicEngine
 from material_selector import create_material_selector, create_material_options
 from utils import (
     kelvin_to_celsius, celsius_to_kelvin, mv_per_m_to_v_per_m, um_to_m,
-    get_color_for_oxide, get_line_style, create_legend_label,
+    get_color_for_oxide, get_color_for_material, get_line_style, create_legend_label,
     validate_inputs, create_temperature_ticks, create_gas_ratio_ticks,
     create_info_text, get_default_materials, get_material_display_name
 )
@@ -73,11 +73,27 @@ app.layout = dbc.Container([
             html.Div([
                 html.H5("Control Panel", className="mb-3"),
                 
-                # Material Selection with Category Tabs
-                create_material_selector(
-                    categories_data=categories_data,
-                    default_materials=default_materials
-                ),
+        # Material Selection with Category Tabs
+        create_material_selector(
+            categories_data=categories_data,
+            default_materials=default_materials
+        ),
+        
+        # Comparison Mode Controls
+        html.Div([
+            html.H6("Comparison Mode", className="mb-2"),
+            dbc.RadioItems(
+                id='comparison-mode',
+                options=[
+                    {"label": "Individual Compounds", "value": "individual"},
+                    {"label": "Compare by Metal", "value": "by_metal"},
+                    {"label": "Compare by Type", "value": "by_type"}
+                ],
+                value="individual",
+                inline=True,
+                className="mb-3"
+            )
+        ], className="control-section"),
                 
                 # Electric Field
                 html.Div([
@@ -139,12 +155,43 @@ app.layout = dbc.Container([
                         id='display-options',
                         options=[
                             {"label": "Show Equilibrium Lines", "value": "equilibrium"},
-                            {"label": "Show Off-Equilibrium Lines", "value": "off_equilibrium"},
-                            {"label": "Show Gas Ratio Scales", "value": "gas_scales"}
+                            {"label": "Show Off-Equilibrium Lines", "value": "off_equilibrium"}
                         ],
-                        value=["equilibrium", "off_equilibrium", "gas_scales"],
+                        value=["equilibrium", "off_equilibrium"],
                         inline=False
                     )
+                ], className="control-section"),
+                
+                # Nomographic Gas Scales (collapsible)
+                html.Div([
+                    dbc.Button(
+                        "Nomographic Gas Scales",
+                        id="collapse-gas-scales-button",
+                        color="light",
+                        size="sm",
+                        className="mb-2",
+                        n_clicks=0
+                    ),
+                    dbc.Collapse([
+                        dbc.Checklist(
+                            id='gas-scale-options',
+                            options=[
+                                {"label": "H₂/H₂O", "value": "H2_H2O"},
+                                {"label": "CO/CO₂", "value": "CO_CO2"},
+                                {"label": "H₂/H₂S", "value": "H2_H2S"},
+                                {"label": "Cl₂/HCl", "value": "Cl2_HCl"},
+                                {"label": "H₂/HCl", "value": "H2_HCl"},
+                                {"label": "CO/HCl", "value": "CO_HCl"},
+                                {"label": "log₁₀(pO₂)", "value": "pO2"},
+                                {"label": "H₂/O₂", "value": "H2_O2"},
+                                {"label": "CO/O₂", "value": "CO_O2"},
+                                {"label": "CH₄/H₂", "value": "CH4_H2"}
+                            ],
+                            value=["H2_H2O", "CO_CO2"],
+                            inline=False,
+                            className="gas-scale-checklist"
+                        )
+                    ], id="collapse-gas-scales", is_open=False)
                 ], className="control-section"),
                 
                 # Export Button
@@ -173,17 +220,43 @@ app.layout = dbc.Container([
     ]),
     
     # Info Panel
-    dbc.Row([
-        dbc.Col([
-            html.Div([
-                html.Div(id="info-panel-content")
-            ], className="info-panel")
-        ])
-    ], className="mt-3")
+        dbc.Row([
+            dbc.Col([
+                html.Div([
+                    html.H4("Thermodynamic Analysis"),
+                    html.Div(id="info-panel-content")
+                ], className="info-panel")
+            ], width=12)
+        ], className="mt-3")
 ], fluid=True)
 
 
 # Callbacks
+# Add client-side callback to preserve material selection
+app.clientside_callback(
+    """
+    function(active_tab, current_selection) {
+        // Preserve current selection when switching tabs
+        return current_selection || [];
+    }
+    """,
+    Output('material-dropdown', 'value', allow_duplicate=True),
+    [Input('material-category-tabs', 'active_tab')],
+    [State('material-dropdown', 'value')],
+    prevent_initial_call=True
+)
+
+@app.callback(
+    Output("collapse-gas-scales", "is_open"),
+    [Input("collapse-gas-scales-button", "n_clicks")],
+    [State("collapse-gas-scales", "is_open")]
+)
+def toggle_gas_scales_collapse(n_clicks, is_open):
+    """Toggle gas scales section visibility."""
+    if n_clicks:
+        return not is_open
+    return is_open
+
 @app.callback(
     Output('material-dropdown', 'options'),
     Input('material-category-tabs', 'active_tab')
@@ -193,22 +266,27 @@ def update_material_options(active_tab):
     if active_tab is None:
         active_tab = 'oxides'
     
-    # Get materials for the selected category
-    materials = data_loader.get_available_materials(category=active_tab)
-    
-    # Create options with proper formatting
-    options = []
-    for material in materials:
-        material_data = data_loader.get_material_data(material)
-        if material_data:
-            formula = material_data.get('formula', '')
-            options.append({
-                "label": get_material_display_name(material),
-                "value": material,
-                "search": f"{material} {formula}".lower()
-            })
-    
-    return options
+    try:
+        # Get materials for the selected category
+        materials = data_loader.get_available_materials(category=active_tab)
+        
+        # Create options with proper formatting
+        options = []
+        for material in materials:
+            material_data = data_loader.get_material_data(material)
+            if material_data:
+                formula = material_data.get('formula', '')
+                options.append({
+                    "label": get_material_display_name(material),
+                    "value": material,
+                    "search": f"{material} {formula}".lower()
+                })
+        
+        return options
+        
+    except Exception as e:
+        print(f"Error updating material options: {e}")
+        return []
 
 
 @app.callback(
@@ -230,9 +308,11 @@ def toggle_custom_radius(radius_value):
      Input('radius-radio', 'value'),
      Input('radius-custom', 'value'),
      Input('temp-range-slider', 'value'),
-     Input('display-options', 'value')]
+     Input('display-options', 'value'),
+     Input('comparison-mode', 'value'),
+     Input('gas-scale-options', 'value')]  # New input
 )
-def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, display_options):
+def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, display_options, comparison_mode, gas_scales):
     """Update the Ellingham diagram plot."""
     if not materials:
         return go.Figure()
@@ -258,6 +338,21 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
         specs=[[{"secondary_y": True}]]
     )
     
+    # Detect compound types in selection
+    categories = set()
+    for material in materials:
+        material_data = data_loader.get_material_data(material)
+        if material_data:
+            categories.add(material_data.get('category', 'oxides'))
+    
+    # Determine normalization strategy
+    if len(categories) == 1:
+        normalization = 'auto'  # Use native units
+        y_label = "ΔG (kJ/mol O₂/N₂/C)"
+    else:
+        normalization = 'metal'  # Normalize to metal for comparison
+        y_label = "ΔG (kJ/mol Metal)"
+    
     # Add traces for each material
     for material in materials:
         # Get material data from the new structure
@@ -270,104 +365,157 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
         if not processed_data:
             continue
             
-        # Calculate equilibrium and off-equilibrium curves using ThermodynamicEngine
-        DG_eq = thermo_engine.calc_equilibrium_DG(material, T_K)
+        # Calculate equilibrium and off-equilibrium curves using normalized method
+        DG_eq, unit = thermo_engine.calc_equilibrium_DG_normalized(material, T_K, normalization)
         DG_eff = thermo_engine.calc_off_equilibrium_DG(material, T_K, E_V_m, r_m)
         
-        # Get color and group (simplified)
+        # Get color and group using new metal-based system
         element = processed_data.get('element', 'Unknown')
-        color = get_color_for_oxide(material, element)  # Use element as group for now
+        formula = material_data.get('formula', '')
+        category = material_data.get('category', 'oxides')
+        color = get_color_for_material(material, formula, category)
         
-        # Add equilibrium line
+        # Add equilibrium line with professional styling
         if 'equilibrium' in display_options:
             fig.add_trace(
                 go.Scatter(
                     x=T_C, y=DG_eq,
                     mode='lines',
                     name=create_legend_label(material, 'equilibrium', field_MV_m, r_um),
-                    line=dict(color=color, width=2, dash='solid'),
+                    line=dict(
+                        color=color, 
+                        width=3, 
+                        dash='solid',
+                        shape='spline',  # Smooth curves like professional diagrams
+                        smoothing=0.3
+                    ),
                     hovertemplate=f"<b>{material}</b><br>" +
                                  "Temperature: %{x:.0f}°C<br>" +
-                                 "ΔG°: %{y:.1f} kJ/mol O₂<extra></extra>"
+                                 f"ΔG°: %{{y:.1f}} {unit}<extra></extra>",
+                    showlegend=True
                 ),
                 secondary_y=False
             )
         
-        # Add off-equilibrium line
+        # Add off-equilibrium line with professional styling
         if 'off_equilibrium' in display_options:
             fig.add_trace(
                 go.Scatter(
                     x=T_C, y=DG_eff,
                     mode='lines',
                     name=create_legend_label(material, 'off_eq', field_MV_m, r_um),
-                    line=dict(color=color, width=3, dash='dash'),
+                    line=dict(
+                        color=color, 
+                        width=2, 
+                        dash='dash',
+                        shape='spline',  # Smooth curves
+                        smoothing=0.3
+                    ),
                     hovertemplate=f"<b>{material}</b><br>" +
                                  "Temperature: %{x:.0f}°C<br>" +
-                                 "ΔG_eff: %{y:.1f} kJ/mol O₂<extra></extra>"
+                                 f"ΔG_eff: %{{y:.1f}} {unit}<extra></extra>",
+                    showlegend=True
                 ),
                 secondary_y=False
             )
     
-    # Add zero line
-    fig.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.5)
+    # Add zero line with professional styling
+    fig.add_hline(
+        y=0, 
+        line_dash="dash", 
+        line_color="rgba(0,0,0,0.6)", 
+        line_width=2,
+        opacity=0.8,
+        annotation_text="ΔG = 0",
+        annotation_position="top right",
+        annotation_font_size=12,
+        annotation_font_color="rgba(0,0,0,0.7)"
+    )
     
-    # Add gas ratio scales if enabled
-    if 'gas_scales' in display_options and materials:
+    # Add nomographic gas ratio scales
+    if gas_scales and len(gas_scales) > 0 and materials:
         try:
             # Use first material for gas ratio calculation
             material = materials[0]
-            DG_eq = thermo_engine.calc_equilibrium_DG(material, T_K)
-            log_H2_H2O, log_CO_CO2 = thermo_engine.calc_gas_ratio_scales(T_K, DG_eq)
             
-            # Calculate pO2 scale
-            log_pO2 = thermo_engine.calc_pO2_scale(T_K)
+            # Calculate gas ratios based on what's being displayed
+            if 'equilibrium' in display_options and 'off_equilibrium' in display_options:
+                # If both are shown, use equilibrium for gas ratios (standard practice)
+                DG_for_gas_ratios = thermo_engine.calc_equilibrium_DG(material, T_K)
+                gas_ratio_label_suffix = " (Equilibrium)"
+            elif 'equilibrium' in display_options:
+                DG_for_gas_ratios = thermo_engine.calc_equilibrium_DG(material, T_K)
+                gas_ratio_label_suffix = " (Equilibrium)"
+            elif 'off_equilibrium' in display_options:
+                # Use off-equilibrium values for gas ratios
+                DG_for_gas_ratios = thermo_engine.calc_off_equilibrium_DG(material, T_K, E_V_m, r_m)
+                gas_ratio_label_suffix = " (Off-Equilibrium)"
+            else:
+                # Default to equilibrium
+                DG_for_gas_ratios = thermo_engine.calc_equilibrium_DG(material, T_K)
+                gas_ratio_label_suffix = " (Equilibrium)"
             
-            # Add gas ratio traces to secondary y-axis
-            fig.add_trace(
-                go.Scatter(
-                    x=T_C, y=log_H2_H2O,
-                    mode='lines',
-                    name="log(H₂/H₂O)",
-                    line=dict(color='red', width=2, dash='dot'),
-                    yaxis='y2'
-                ),
-                secondary_y=True
-            )
+            # Calculate all gas ratios using the appropriate DG values
+            all_ratios = thermo_engine.calc_comprehensive_gas_ratios(T_K, DG_for_gas_ratios)
+            metadata = thermo_engine.get_gas_ratio_metadata()
             
-            fig.add_trace(
-                go.Scatter(
-                    x=T_C, y=log_CO_CO2,
-                    mode='lines', 
-                    name="log(CO/CO₂)",
-                    line=dict(color='blue', width=2, dash='dot'),
-                    yaxis='y2'
-                ),
-                secondary_y=True
-            )
+            # Add selected gas ratio traces
+            for gas_key in gas_scales:
+                if gas_key in all_ratios:
+                    gas_info = metadata[gas_key]
+                    
+                    fig.add_trace(
+                        go.Scatter(
+                            x=T_C,
+                            y=all_ratios[gas_key],
+                            mode='lines',
+                            name=gas_info['label'] + gas_ratio_label_suffix,
+                            line=dict(
+                                color=gas_info['color'],
+                                width=1.5,
+                                dash='dot',
+                                shape='spline',
+                                smoothing=0.3
+                            ),
+                            yaxis='y2',
+                            hovertemplate=f"<b>{gas_info['label']}</b><br>" +
+                                         f"{gas_info['description']}<br>" +
+                                         f"Based on: {gas_ratio_label_suffix.strip(' ()')}<br>" +
+                                         "Temperature: %{x:.0f}°C<br>" +
+                                         "Value: %{y:.2f}<extra></extra>",
+                            showlegend=True,
+                            legendgroup='gas_ratios'
+                        ),
+                        secondary_y=True
+                    )
             
-            fig.add_trace(
-                go.Scatter(
-                    x=T_C, y=log_pO2,
-                    mode='lines',
-                    name="log₁₀(pO₂)",
-                    line=dict(color='green', width=2, dash='dot'),
-                    yaxis='y2'
-                ),
-                secondary_y=True
-            )
-            
-            # Update secondary y-axis with proper title
-            fig.update_yaxes(
-                title_text="Gas Ratios: log(H₂/H₂O), log(CO/CO₂), log₁₀(pO₂)", 
-                secondary_y=True
-            )
+            # Configure secondary y-axis with nomographic styling
+            if fig.data:  # Only if traces were added
+                fig.update_yaxes(
+                    title=dict(
+                        text=f"Gas Ratios (log scale){gas_ratio_label_suffix}",
+                        font=dict(size=12, family="Arial, sans-serif")
+                    ),
+                    overlaying="y",
+                    side="right",
+                    tickfont=dict(size=10, family="Arial, sans-serif"),
+                    gridcolor='rgba(128,128,128,0.1)',
+                    gridwidth=0.5,
+                    showgrid=True,
+                    zeroline=True,
+                    zerolinecolor='rgba(0,0,0,0.3)',
+                    zerolinewidth=1,
+                    linecolor='rgba(0,0,0,0.3)',
+                    linewidth=1,
+                    secondary_y=True
+                )
+                
         except Exception as e:
-            print(f"Warning: Could not add gas ratio scales: {e}")
+            print(f"Warning: Could not add nomographic gas ratio scales: {e}")
             import traceback
             traceback.print_exc()
-            pass
     
-    # Determine plot title based on display options
+    # Determine plot title based on display options and comparison mode
     if 'equilibrium' in display_options and 'off_equilibrium' in display_options:
         plot_title = "Off-Equilibrium Ellingham Diagram"
     elif 'equilibrium' in display_options:
@@ -377,20 +525,62 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
     else:
         plot_title = "Ellingham Diagram"
     
-    # Update layout
+    # Add comparison mode to title
+    if comparison_mode == 'by_metal':
+        plot_title += " - Grouped by Metal"
+    elif comparison_mode == 'by_type':
+        plot_title += " - Grouped by Compound Type"
+    
+    # Professional formatting based on PNG analysis
     fig.update_layout(
-        title=plot_title,
-        xaxis_title="Temperature (°C)",
-        yaxis_title="ΔG (kJ/mol O₂)",
+        title=dict(
+            text=plot_title,
+            font=dict(size=18, family="Arial, sans-serif"),
+            x=0.5,
+            xanchor='center'
+        ),
+        xaxis=dict(
+            title=dict(
+                text="Temperature (°C)",
+                font=dict(size=14, family="Arial, sans-serif")
+            ),
+            tickfont=dict(size=12, family="Arial, sans-serif"),
+            gridcolor='rgba(128,128,128,0.2)',
+            gridwidth=1,
+            showgrid=True,
+            zeroline=False,
+            linecolor='black',
+            linewidth=1
+        ),
+        yaxis=dict(
+            title=dict(
+                text=y_label,
+                font=dict(size=14, family="Arial, sans-serif")
+            ),
+            tickfont=dict(size=12, family="Arial, sans-serif"),
+            gridcolor='rgba(128,128,128,0.2)',
+            gridwidth=1,
+            showgrid=True,
+            zeroline=False,
+            linecolor='black',
+            linewidth=1
+        ),
         hovermode='closest',
         legend=dict(
             orientation="v",
             yanchor="top",
             y=1,
             xanchor="left",
-            x=1.02
+            x=1.02,
+            font=dict(size=11, family="Arial, sans-serif"),
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor='rgba(0,0,0,0.2)',
+            borderwidth=1
         ),
-        margin=dict(r=150)
+        margin=dict(r=200, t=80, b=60, l=80),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(family="Arial, sans-serif")
     )
     
     # Add temperature markers

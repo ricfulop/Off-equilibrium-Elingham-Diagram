@@ -1,0 +1,55 @@
+{
+  "metals": {
+    "Ti": {"price": 7.50, "date": "2024-01-01", "source": "LME"},
+    "Al": {"price": 2.20, "date": "2024-01-01", "source": "LME"},
+    "Zr": {"price": 35.00, "date": "2024-01-01", "source": "Market"},
+    "Fe": {"price": 0.08, "date": "2024-01-01", "source": "LME"},
+    "Ni": {"price": 16.50, "date": "2024-01-01", "source": "LME"},
+    "Cr": {"price": 8.00, "date": "2024-01-01", "source": "Market"},
+    "Mo": {"price": 42.00, "date": "2024-01-01", "source": "LME"},
+    "W": {"price": 34.00, "date": "2024-01-01", "source": "Market"},
+    "V": {"price": 28.00, "date": "2024-01-01", "source": "Market"},
+    "Nb": {"price": 45.00, "date": "2024-01-01", "source": "Market"},
+    "Ta": {"price": 280.00, "date": "2024-01-01", "source": "Market"},
+    "Mg": {"price": 3.50, "date": "2024-01-01", "source": "LME"},
+    "Ca": {"price": 2.00, "date": "2024-01-01", "source": "Market"},
+    "Si": {"price": 1.80, "date": "2024-01-01", "source": "Market"},
+    "Cu": {"price": 8.50, "date": "2024-01-01", "source": "LME"},
+    "Zn": {"price": 2.80, "date": "2024-01-01", "source": "LME"},
+    "Pb": {"price": 2.20, "date": "2024-01-01", "source": "LME"},
+    "Sn": {"price": 25.00, "date": "2024-01-01", "source": "LME"},
+    "Li": {"price": 65.00, "date": "2024-01-01", "source": "Market"},
+    "Na": {"price": 2.50, "date": "2024-01-01", "source": "Market"},
+    "K": {"price": 15.00, "date": "2024-01-01", "source": "Market"},
+    "Co": {"price": 55.00, "date": "2024-01-01", "source": "LME"},
+    "Mn": {"price": 1.80, "date": "2024-01-01", "source": "LME"}
+  },
+  "energy": {
+    "electricity": {"price": 0.07, "unit": "USD/kWh", "date": "2024-01-01"},
+    "hydrogen": {"price": 5.00, "unit": "USD/kg", "date": "2024-01-01"},
+    "natural_gas": {"price": 0.15, "unit": "USD/m3", "date": "2024-01-01"}
+  },
+  "oxides": {
+    "TiO2": {"price": 2.50, "date": "2024-01-01", "source": "Market"},
+    "Al2O3": {"price": 0.45, "date": "2024-01-01", "source": "Market"},
+    "Fe2O3": {"price": 0.05, "date": "2024-01-01", "source": "Market"},
+    "ZrO2": {"price": 8.50, "date": "2024-01-01", "source": "Market"},
+    "MgO": {"price": 0.15, "date": "2024-01-01", "source": "Market"},
+    "CaO": {"price": 0.08, "date": "2024-01-01", "source": "Market"},
+    "Cr2O3": {"price": 1.20, "date": "2024-01-01", "source": "Market"},
+    "MoO3": {"price": 12.00, "date": "2024-01-01", "source": "Market"},
+    "WO3": {"price": 8.50, "date": "2024-01-01", "source": "Market"},
+    "V2O5": {"price": 6.50, "date": "2024-01-01", "source": "Market"},
+    "SiO2": {"price": 0.05, "date": "2024-01-01", "source": "Market"}
+  },
+  "nitrides": {
+    "TiN": {"price": 45.00, "date": "2024-01-01", "source": "Market"},
+    "AlN": {"price": 25.00, "date": "2024-01-01", "source": "Market"},
+    "Si3N4": {"price": 15.00, "date": "2024-01-01", "source": "Market"}
+  },
+  "carbides": {
+    "TiC": {"price": 35.00, "date": "2024-01-01", "source": "Market"},
+    "SiC": {"price": 8.50, "date": "2024-01-01", "source": "Market"},
+    "WC": {"price": 45.00, "date": "2024-01-01", "source": "Market"}
+  }
+}

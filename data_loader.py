@@ -105,9 +105,127 @@ class JANAFDataLoader:
         for oxide_type, (n_electrons, n_oxygen) in stoichiometry_map.items():
             if oxide_type in species_lower:
                 return n_electrons, n_oxygen
-                
         # Default assumption for unknown oxides
         return 4, 2  # Assume MO2
+    
+    def extract_compound_stoichiometry(self, species_name: str, formula: str, category: str) -> Dict:
+        """Extract stoichiometry for any compound type.
+        
+        Returns dict with:
+        - n_electrons: electrons transferred
+        - n_nonmetal: stoichiometry of non-metal (O, N, C, etc.)
+        - nonmetal_type: 'O2', 'N2', 'C', etc.
+        - normalization_factor: for converting to standard basis
+        """
+        
+        if category == 'oxides':
+            n_electrons, n_oxygen = self.extract_stoichiometry(species_name)
+            return {
+                'n_electrons': n_electrons,
+                'n_nonmetal': n_oxygen,
+                'nonmetal_type': 'O2',
+                'normalization_factor': n_oxygen / 2
+            }
+        elif category == 'nitrides':
+            # Parse nitrogen stoichiometry from formula
+            # TiN: n_nitrogen=1, AlN: n_nitrogen=1
+            n_nitrogen = self._parse_nitrogen_stoichiometry(formula)
+            return {
+                'n_electrons': 3 * n_nitrogen,  # N2 + 3H2 -> 2NH3
+                'n_nonmetal': n_nitrogen,
+                'nonmetal_type': 'N2',
+                'normalization_factor': n_nitrogen / 2
+            }
+        elif category == 'carbides':
+            # Parse carbon stoichiometry
+            # TiC: n_carbon=1, Al4C3: n_carbon=3
+            n_carbon = self._parse_carbon_stoichiometry(formula)
+            return {
+                'n_electrons': 4 * n_carbon,  # C + 2H2 -> CH4
+                'n_nonmetal': n_carbon,
+                'nonmetal_type': 'C',
+                'normalization_factor': n_carbon
+            }
+        elif category == 'halides':
+            # Parse halide stoichiometry
+            # TiCl4: n_halide=4, AlF3: n_halide=3
+            n_halide = self._parse_halide_stoichiometry(formula)
+            return {
+                'n_electrons': n_halide,  # Halide + H2 -> HX
+                'n_nonmetal': n_halide,
+                'nonmetal_type': 'Halide',
+                'normalization_factor': n_halide
+            }
+        elif category == 'sulfides':
+            # Parse sulfur stoichiometry
+            # TiS2: n_sulfur=2, FeS: n_sulfur=1
+            n_sulfur = self._parse_sulfur_stoichiometry(formula)
+            return {
+                'n_electrons': 2 * n_sulfur,  # S + H2 -> H2S
+                'n_nonmetal': n_sulfur,
+                'nonmetal_type': 'S',
+                'normalization_factor': n_sulfur
+            }
+        else:
+            # Default for other compound types
+            return {
+                'n_electrons': 4,  # Default assumption
+                'n_nonmetal': 1,
+                'nonmetal_type': 'Unknown',
+                'normalization_factor': 1
+            }
+    
+    def _parse_nitrogen_stoichiometry(self, formula: str) -> int:
+        """Parse nitrogen stoichiometry from chemical formula."""
+        import re
+        
+        # Look for N followed by optional number
+        match = re.search(r'N(\d*)', formula)
+        if match:
+            number = match.group(1)
+            return int(number) if number else 1
+        
+        # Default assumption
+        return 1
+    
+    def _parse_carbon_stoichiometry(self, formula: str) -> int:
+        """Parse carbon stoichiometry from chemical formula."""
+        import re
+        
+        # Look for C followed by optional number
+        match = re.search(r'C(\d*)', formula)
+        if match:
+            number = match.group(1)
+            return int(number) if number else 1
+        
+        # Default assumption
+        return 1
+    
+    def _parse_halide_stoichiometry(self, formula: str) -> int:
+        """Parse halide stoichiometry from chemical formula."""
+        import re
+        
+        # Look for F, Cl, Br, I followed by optional number
+        match = re.search(r'[FClBrI](\d*)', formula)
+        if match:
+            number = match.group(1)
+            return int(number) if number else 1
+        
+        # Default assumption
+        return 1
+    
+    def _parse_sulfur_stoichiometry(self, formula: str) -> int:
+        """Parse sulfur stoichiometry from chemical formula."""
+        import re
+        
+        # Look for S followed by optional number
+        match = re.search(r'S(\d*)', formula)
+        if match:
+            number = match.group(1)
+            return int(number) if number else 1
+        
+        # Default assumption
+        return 1
     
     def process_oxide_data(self, species_name: str) -> Dict:
         """

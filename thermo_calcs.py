@@ -66,6 +66,45 @@ class ThermodynamicEngine:
         
         return DG_eff
     
+    def calc_equilibrium_DG_normalized(self, material_name: str, T_K: np.ndarray, 
+                                      normalization: str = 'auto') -> Tuple[np.ndarray, str]:
+        """Calculate normalized Gibbs free energy.
+        
+        Args:
+            material_name: Material identifier
+            T_K: Temperature array
+            normalization: 'auto', 'metal', 'nonmetal', or 'reducing_agent'
+        
+        Returns:
+            (DG_normalized, unit_label)
+        """
+        material_data = self.data_loader.get_material_data(material_name)
+        category = material_data.get('category', 'oxides')
+        
+        # Get raw Gibbs free energy
+        DG_raw = self.data_loader.interpolate_DG(material_name, T_K)
+        
+        stoich = self.data_loader.extract_compound_stoichiometry(
+            material_name, 
+            material_data.get('formula', ''),
+            category
+        )
+        
+        if normalization == 'auto':
+            # Use native normalization (O2, N2, or C)
+            return DG_raw, f"kJ/mol {stoich['nonmetal_type']}"
+        elif normalization == 'metal':
+            # Normalize to per mol metal atom
+            DG_normalized = DG_raw * stoich['normalization_factor']
+            return DG_normalized, "kJ/mol Metal"
+        elif normalization == 'reducing_agent':
+            # Normalize to per mol H2
+            DG_normalized = DG_raw / (stoich['n_electrons'] / 2)
+            return DG_normalized, "kJ/mol H2"
+        else:
+            # Default to auto normalization
+            return DG_raw, f"kJ/mol {stoich['nonmetal_type']}"
+    
     def _get_W_ph(self, oxide_key: str) -> float:
         """Get phonon/plasma work constant for the oxide."""
         return W_PH_CONSTANTS.get(oxide_key, 20.0)  # Default value
@@ -131,6 +170,129 @@ class ThermodynamicEngine:
         log_CO_CO2 = np.full_like(T_K, -2.0) + 0.001 * (T_K - 1273)  # Slight temperature dependence
         
         return log_H2_H2O, log_CO_CO2
+    
+    def calc_comprehensive_gas_ratios(self, T_K: np.ndarray, DG_values: np.ndarray) -> Dict[str, np.ndarray]:
+        """Calculate gas ratio scales using traditional Ellingham nomographic principles.
+        
+        Works with both equilibrium and off-equilibrium Gibbs free energy values.
+        Uses reference points and proper thermodynamic relationships.
+        
+        Args:
+            T_K: Temperature array in Kelvin
+            DG_values: Gibbs free energy values (equilibrium or off-equilibrium) in kJ/mol
+        
+        Returns:
+            Dictionary of gas ratio arrays with keys:
+            - H2_H2O, CO_CO2, H2_H2S, Cl2_HCl, H2_HCl, CO_HCl, 
+              pO2, H2_O2, CO_O2, CH4_H2
+        """
+        R = 8.314e-3  # kJ/(mol·K)
+        T_C = T_K - 273.15
+        
+        gas_ratios = {}
+        
+        # 1. Oxygen partial pressure (log₁₀(pO₂))
+        # pO₂ = exp(ΔG / RT) - works for both equilibrium and off-equilibrium
+        gas_ratios['pO2'] = DG_values / (R * T_K * np.log(10))
+        
+        # 2. CO/CO₂ ratio using correct reference point
+        # Reference: CO + 1/2 O₂ → CO₂, ΔG° = -257.2 + 0.084*T kJ/mol
+        DG_CO_ref = -257.2 + 0.084 * T_C
+        gas_ratios['CO_CO2'] = (DG_values - DG_CO_ref) / (2 * R * T_K)
+        
+        # 3. H₂/H₂O ratio using correct reference point  
+        # Reference: H₂ + 1/2 O₂ → H₂O, ΔG° = -237.1 + 0.043*T kJ/mol
+        DG_H2_ref = -237.1 + 0.043 * T_C
+        gas_ratios['H2_H2O'] = (DG_values - DG_H2_ref) / (2 * R * T_K)
+        
+        # 4. H₂/H₂S ratio (sulfide reduction)
+        # H₂S + 1/2 O₂ → H₂O + S, ΔG° = -200.4 + 0.042*T kJ/mol
+        DG_H2S_ref = -200.4 + 0.042 * T_C
+        gas_ratios['H2_H2S'] = (DG_values - DG_H2S_ref) / (2 * R * T_K)
+        
+        # 5. Cl₂/HCl ratio (chlorine system)
+        # 2 HCl + 1/2 O₂ → H₂O + Cl₂, ΔG° = -95.3 + 0.021*T kJ/mol
+        DG_HCl_ref = -95.3 + 0.021 * T_C
+        gas_ratios['Cl2_HCl'] = (DG_values - DG_HCl_ref) / (2 * R * T_K)
+        
+        # 6. H₂/HCl ratio
+        gas_ratios['H2_HCl'] = gas_ratios['H2_H2O'] + 0.5 * gas_ratios['Cl2_HCl']
+        
+        # 7. CO/HCl ratio
+        gas_ratios['CO_HCl'] = gas_ratios['CO_CO2'] + 0.5 * gas_ratios['Cl2_HCl']
+        
+        # 8. H₂/O₂ ratio (direct hydrogen oxidation)
+        gas_ratios['H2_O2'] = -gas_ratios['H2_H2O']
+        
+        # 9. CO/O₂ ratio (direct CO oxidation)
+        gas_ratios['CO_O2'] = -gas_ratios['CO_CO2']
+        
+        # 10. CH₄/H₂ ratio (methane reforming)
+        # CH₄ + 2 O₂ → CO₂ + 2 H₂O, ΔG° = -800.8 + 0.205*T kJ/mol
+        DG_CH4_ref = -800.8 + 0.205 * T_C
+        gas_ratios['CH4_H2'] = (DG_values - DG_CH4_ref) / (2 * R * T_K)
+        
+        # Apply reasonable bounds to prevent unrealistic values
+        for key in gas_ratios:
+            # Clamp gas ratios to reasonable ranges (wider bounds)
+            gas_ratios[key] = np.clip(gas_ratios[key], -50, 50)
+        
+        return gas_ratios
+
+    def get_gas_ratio_metadata(self) -> Dict[str, Dict[str, str]]:
+        """Get display metadata for all gas ratios."""
+        return {
+            'H2_H2O': {
+                'label': 'log(H₂/H₂O)',
+                'color': '#e74c3c',
+                'description': 'Hydrogen reduction'
+            },
+            'CO_CO2': {
+                'label': 'log(CO/CO₂)',
+                'color': '#3498db',
+                'description': 'Carbon monoxide reduction'
+            },
+            'H2_H2S': {
+                'label': 'log(H₂/H₂S)',
+                'color': '#f39c12',
+                'description': 'Hydrogen sulfide reduction'
+            },
+            'Cl2_HCl': {
+                'label': 'log(Cl₂/HCl)',
+                'color': '#9b59b6',
+                'description': 'Chlorine system'
+            },
+            'H2_HCl': {
+                'label': 'log(H₂/HCl)',
+                'color': '#e67e22',
+                'description': 'Hydrogen chloride reduction'
+            },
+            'CO_HCl': {
+                'label': 'log(CO/HCl)',
+                'color': '#34495e',
+                'description': 'CO chloride reduction'
+            },
+            'pO2': {
+                'label': 'log₁₀(pO₂)',
+                'color': '#2c3e50',
+                'description': 'Oxygen partial pressure'
+            },
+            'H2_O2': {
+                'label': 'log(H₂/O₂)',
+                'color': '#1abc9c',
+                'description': 'Direct hydrogen oxidation'
+            },
+            'CO_O2': {
+                'label': 'log(CO/O₂)',
+                'color': '#8e44ad',
+                'description': 'Direct CO oxidation'
+            },
+            'CH4_H2': {
+                'label': 'log(CH₄/H₂)',
+                'color': '#27ae60',
+                'description': 'Methane reforming'
+            }
+        }
     
     def calc_reduction_feasibility(self, DG_eff: float) -> Tuple[str, str]:
         """
