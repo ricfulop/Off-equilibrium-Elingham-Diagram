@@ -1,6 +1,6 @@
 # Off-Equilibrium Ellingham Diagram Interactive Dash App
 
-[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
+[![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 
@@ -8,7 +8,7 @@ An interactive web application for visualizing equilibrium and off-equilibrium E
 
 **Author**: Ric Fulop  
 **Affiliation**: MIT Center for Bits and Atoms  
-**Version**: 1.4.0
+**Version**: 1.6.0
 
 ## Overview
 
@@ -29,8 +29,26 @@ This application implements the novel **off-equilibrium thermodynamics model** f
 - **Temperature Range**: Visualize thermodynamic behavior from 300-2400 K
 - **Dual Visualization**: Overlay equilibrium and off-equilibrium curves
 - **Gas Ratio Scales**: Display H₂/H₂O and CO/CO₂ ratios for reduction analysis
+- **Gas Composition Selection**: Choose between N₂ 75%/H₂ 25% and Ar 95%/H₂ 5% gas mixtures
+- **Dynamic Feasibility Analysis**: Real-time assessment based on selected gas composition
+- **Industrial Processing Analysis**: Carrier gas flow calculations (N₂ or Ar) update automatically
 - **Real-time Analysis**: Instant thermodynamic feasibility assessment
 - **Data Export**: Export calculated data for further analysis
+
+## Recent Updates (v1.6.0)
+
+### Gas Composition Selection (v1.6.0)
+- **N₂ 75% / H₂ 25%**: Standard industrial gas mixture (default)
+- **Ar 95% / H₂ 5%**: Low H₂ concentration for testing and validation
+- **Dynamic Analysis**: All calculations update when gas composition changes
+- **Fixed Gas Calculations**: Proper thermodynamic calculations instead of placeholder values
+- **Enhanced Processing Analysis**: Carrier gas flows (N₂ or Ar) calculated correctly
+
+### Gas Calculation Improvements
+- **H₂ Partial Pressure**: Real calculated values instead of zeros
+- **H₂/H₂O Ratios**: Proper thermodynamic calculations
+- **Oxygen Potential**: Accurate ln(pO₂) values
+- **Feasibility Analysis**: Based on actual gas composition availability
 
 ## Recent Updates (v1.4.0+)
 
