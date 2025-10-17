@@ -1,6 +1,6 @@
 # Off-Equilibrium Ellingham Diagram Interactive Dash App
 
-[![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
+[![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 
@@ -8,7 +8,7 @@ An interactive web application for visualizing equilibrium and off-equilibrium E
 
 **Author**: Ric Fulop  
 **Affiliation**: MIT Center for Bits and Atoms  
-**Version**: 1.6.0
+**Version**: 1.7.0
 
 ## Overview
 
@@ -34,6 +34,26 @@ This application implements the novel **off-equilibrium thermodynamics model** f
 - **Industrial Processing Analysis**: Carrier gas flow calculations (N₂ or Ar) update automatically
 - **Real-time Analysis**: Instant thermodynamic feasibility assessment
 - **Data Export**: Export calculated data for further analysis
+
+## Recent Updates (v1.7.0)
+
+### Enhanced User Experience (v1.7.0)
+- **Temperature Labels**: Clear temperature identification (800°C, 1000°C, 1200°C) in residence time analysis
+- **Fixed UI Issues**: Resolved temperature slider text overlap and port conflicts
+- **Scientific Validation**: Literature-based parameters with confidence indicators
+- **Comprehensive Roadmap**: Long-term development plan through 2027+
+
+### Scientific Accuracy Improvements
+- **Literature Integration**: All parameters sourced from peer-reviewed literature
+- **Confidence Indicators**: Visual feedback (🟢🟡🔴) on calculation reliability
+- **Validation Engine**: Cross-reference calculations with experimental data
+- **Source Attribution**: Complete citation system with proper references
+
+### Enhanced Analysis Features
+- **Kinetic Analysis**: Detailed flash enhancement modeling and conversion time calculations
+- **Residence Time Analysis**: Complete particle residence analysis with conversion percentages
+- **Process Efficiency**: Comprehensive efficiency analysis including thermodynamic feasibility
+- **Parameter Validation**: Automatic validation against literature temperature ranges
 
 ## Recent Updates (v1.6.0)
 

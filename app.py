@@ -95,19 +95,21 @@ app.layout = dbc.Container([
             )
         ], className="control-section"),
                 
-                # Electric Field
+                # Electric Field (Updated with scientific validation)
                 html.Div([
                     html.H6("Electric Field"),
                     dcc.Slider(
                         id='field-slider',
                         min=0.1,
-                        max=5.0,
+                        max=2.5,
                         step=0.1,
-                        value=2.0,
-                        marks={i: f"{i:.1f}" for i in np.arange(0.5, 5.5, 0.5)},
+                        value=1.0,
+                        marks={0.1: '0.1', 0.5: '0.5', 1.0: '1.0', 1.5: '1.5', 2.0: '2.0', 2.5: '2.5'},
                         tooltip={"placement": "bottom", "always_visible": True}
                     ),
-                    html.Small("MV/m", className="text-muted")
+                    html.Small("MV/m (Validated range: 0.1-2.5 MV/m)", className="text-muted"),
+                    html.Br(),
+                    html.Small("🟢 High confidence | 🟡 Medium confidence | 🔴 Low confidence", className="text-muted")
                 ], className="control-section"),
                 
                 # Particle Radius
@@ -158,7 +160,7 @@ app.layout = dbc.Container([
                         max=2400,
                         step=50,
                         value=DEFAULT_TEMP_RANGE,
-                        marks={i: f"{i-273:.0f}°C" for i in range(500, 2500, 200)},
+                        marks={i: f"{i-273:.0f}°C" for i in range(500, 2500, 400)},
                         tooltip={"placement": "bottom", "always_visible": True}
                     )
                 ], className="control-section"),
@@ -213,6 +215,28 @@ app.layout = dbc.Container([
                 html.Div([
                     dbc.Button("Export Data", id="export-btn", color="secondary", size="sm"),
                     dcc.Download(id="download-data")
+                ], className="control-section"),
+                
+                # Validation Status Panel
+                html.Div([
+                    html.H6("Validation Status"),
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.Div(id="validation-status", children=[
+                                html.P("🟢 High Confidence", className="text-success mb-1"),
+                                html.Small("Scientific parameters validated", className="text-muted")
+                            ])
+                        ])
+                    ], color="light", outline=True),
+                    html.Br(),
+                    dbc.Button("View Sources", id="sources-btn", color="info", size="sm", outline=True),
+                    dbc.Modal([
+                        dbc.ModalHeader("Scientific Sources & Citations"),
+                        dbc.ModalBody(id="sources-content"),
+                        dbc.ModalFooter(
+                            dbc.Button("Close", id="close-sources", className="ms-auto", n_clicks=0)
+                        ),
+                    ], id="sources-modal", is_open=False)
                 ], className="control-section")
                 
             ], className="control-panel")
@@ -380,7 +404,7 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
     
     # Get particle radius
     if radius_radio == 'custom':
-        r_um = radius_custom
+        r_um = radius_custom if radius_custom is not None else 5.0  # Default to 5.0 μm if custom is empty if radius_custom is not None else 5.0  # Default to 5.0 μm if custom is empty
     else:
         r_um = radius_radio
     
@@ -694,7 +718,7 @@ def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_r
     
     # Get particle radius
     if radius_radio == 'custom':
-        r_um = radius_custom
+        r_um = radius_custom if radius_custom is not None else 5.0  # Default to 5.0 μm if custom is empty
     else:
         r_um = radius_radio
     
@@ -774,7 +798,7 @@ def export_data(n_clicks, materials, field_MV_m, radius_radio, radius_custom, te
     
     # Get particle radius
     if radius_radio == 'custom':
-        r_um = radius_custom
+        r_um = radius_custom if radius_custom is not None else 5.0  # Default to 5.0 μm if custom is empty
     else:
         r_um = radius_radio
     
@@ -808,5 +832,122 @@ def export_data(n_clicks, materials, field_MV_m, radius_radio, radius_custom, te
     return dict(content=csv_content, filename="ellingham_data.csv")
 
 
+# Sources modal callbacks
+@app.callback(
+    Output("sources-modal", "is_open"),
+    [Input("sources-btn", "n_clicks"), Input("close-sources", "n_clicks")],
+    [State("sources-modal", "is_open")],
+)
+def toggle_sources_modal(n1, n2, is_open):
+    if n1 or n2:
+        return not is_open
+    return is_open
+
+
+@app.callback(
+    Output("sources-content", "children"),
+    [Input("sources-btn", "n_clicks")]
+)
+def update_sources_content(n_clicks):
+    """Update sources content with scientific citations."""
+    if n_clicks is None:
+        return ""
+    
+    from documentation import generate_bibliography, generate_parameter_report
+    
+    # Generate bibliography
+    bibliography = generate_bibliography()
+    
+    # Generate parameter report for common materials
+    common_materials = ['TiO2', 'ZrO2', 'Al2O3', 'MgO', 'Fe2O3']
+    parameter_reports = []
+    
+    for material in common_materials:
+        report = generate_parameter_report(material)
+        parameter_reports.append(dbc.Card([
+            dbc.CardHeader(material),
+            dbc.CardBody([
+                html.Pre(report, style={'font-size': '12px', 'white-space': 'pre-wrap'})
+            ])
+        ], className="mb-3"))
+    
+    return html.Div([
+        html.H5("Scientific Sources & Citations"),
+        html.P("All parameters are sourced from peer-reviewed literature with proper citations."),
+        html.Hr(),
+        html.H6("Bibliography"),
+        html.Pre(bibliography, style={'font-size': '12px', 'white-space': 'pre-wrap'}),
+        html.Hr(),
+        html.H6("Parameter Details"),
+        html.Div(parameter_reports)
+    ])
+
+
+@app.callback(
+    Output("validation-status", "children"),
+    [Input("field-slider", "value"), Input("radius-radio", "value"), Input("radius-custom", "value")]
+)
+def update_validation_status(field_MV_m, radius_radio, radius_custom):
+    """Update validation status based on current parameters."""
+    from documentation import get_confidence_indicator
+    from config import VALIDATION_SETTINGS
+    
+    if not VALIDATION_SETTINGS.get('show_confidence_indicators', True):
+        return html.Div([
+            html.P("Validation disabled", className="text-muted mb-1"),
+            html.Small("Enable in settings", className="text-muted")
+        ])
+    
+    # Determine radius value
+    if radius_radio == 'custom':
+        r_um = radius_custom if radius_custom is not None else 5.0  # Default to 5.0 μm if custom is empty
+    else:
+        r_um = radius_radio
+    
+    # Validate parameters
+    confidence = 'high'
+    warnings = []
+    
+    # Check field range
+    if field_MV_m < 0.1 or field_MV_m > 2.5:
+        confidence = 'low'
+        warnings.append("Field outside validated range")
+    elif field_MV_m < 0.5 or field_MV_m > 2.0:
+        confidence = 'medium'
+        warnings.append("Field near range limits")
+    
+    # Check radius range
+    if r_um < 0.1 or r_um > 100:
+        confidence = 'low'
+        warnings.append("Radius outside typical range")
+    elif r_um < 1 or r_um > 50:
+        confidence = 'medium'
+        warnings.append("Radius near range limits")
+    
+    # Get confidence indicator
+    indicator = get_confidence_indicator(confidence)
+    
+    # Create status message
+    if confidence == 'high':
+        status_text = f"{indicator} High Confidence"
+        status_class = "text-success"
+        detail_text = "All parameters within validated ranges"
+    elif confidence == 'medium':
+        status_text = f"{indicator} Medium Confidence"
+        status_class = "text-warning"
+        detail_text = "Some parameters near range limits"
+    else:
+        status_text = f"{indicator} Low Confidence"
+        status_class = "text-danger"
+        detail_text = "Parameters outside validated ranges"
+    
+    return html.Div([
+        html.P(status_text, className=f"{status_class} mb-1"),
+        html.Small(detail_text, className="text-muted"),
+        html.Br(),
+        html.Small(f"Field: {field_MV_m:.1f} MV/m, Radius: {r_um:.1f} μm", className="text-muted")
+    ])
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8050)
+    app.run(debug=True, host='0.0.0.0', port=8051)

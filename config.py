@@ -1,11 +1,34 @@
 """
 Configuration constants for the Off-Equilibrium Ellingham Diagram App
+Scientific parameters are sourced from literature with proper validation.
 """
 
 # Physical constants
 FARADAY_CONSTANT = 96485  # C/mol
 
-# Phonon/plasma work constants [kJ/mol O₂]
+# Import scientific parameters with validation
+from scientific_data import W_PH_CONSTANTS_SCIENTIFIC, get_parameter_with_validation
+
+# Legacy W_PH_CONSTANTS for backward compatibility (now uses scientific data)
+def get_w_ph_constant(material: str, temperature: float = 1000) -> float:
+    """
+    Get phonon/plasma work constant with scientific validation.
+    
+    Args:
+        material: Material identifier
+        temperature: Temperature in K for validation
+        
+    Returns:
+        W_ph constant in kJ/mol O₂
+    """
+    value, warning = get_parameter_with_validation(
+        W_PH_CONSTANTS_SCIENTIFIC, material, temperature, 20.0
+    )
+    if warning:
+        print(f"WARNING: {warning}")
+    return value
+
+# Legacy dictionary for backward compatibility
 W_PH_CONSTANTS = {
     'TiO2': 20.0,
     'ZrO2': 22.0,
@@ -135,3 +158,36 @@ GAS_COMPOSITION_PRESETS = {
 
 # Default gas composition
 DEFAULT_GAS_COMPOSITION = 'N2_H2_25'
+
+# Reactor Design Parameters (Updated for 1 cm spacing)
+REACTOR_DESIGN = {
+    'inner_tube_id_inches': 4.0,           # 4" inner diameter
+    'inner_tube_id_m': 0.1016,             # 4" = 10.16 cm
+    'electrode_spacing_m': 0.01,            # 1 cm spacing
+    'electrode_radius_m': 0.0508,          # 2" radius
+    'powder_bed_thickness_m': 0.01,        # 1 cm powder bed
+    'max_voltage_kv': 25,                   # 25 kV limit (safety margin)
+    'target_field_mv_m': 2.0,              # 2 MV/m target
+    'breakdown_limit_mv_m': 3.0,           # 3 MV/m breakdown limit
+    'field_range_mv_m': [0.1, 2.5],        # Realistic field range
+    'description': '4" ID tube, 1cm electrode spacing, zirconia electrodes'
+}
+
+# Updated field slider configuration
+FIELD_SLIDER_CONFIG = {
+    'min': 0.1,      # 0.1 MV/m minimum
+    'max': 2.5,      # 2.5 MV/m maximum (below breakdown)
+    'step': 0.1,     # 0.1 MV/m steps
+    'marks': {0.1: '0.1', 0.5: '0.5', 1.0: '1.0', 1.5: '1.5', 2.0: '2.0', 2.5: '2.5'},
+    'value': 1.0     # Default to 1 MV/m
+}
+
+# Validation and confidence settings
+VALIDATION_SETTINGS = {
+    'enable_validation': True,
+    'show_warnings': True,
+    'show_confidence_indicators': True,
+    'show_source_citations': True,
+    'max_warning_deviation': 0.3,  # 30% deviation threshold
+    'high_confidence_threshold': 0.1,  # 10% deviation for high confidence
+}

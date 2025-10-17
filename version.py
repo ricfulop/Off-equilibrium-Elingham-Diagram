@@ -1,5 +1,5 @@
 # Version Information
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 __author__ = "Ric Fulop"
 __affiliation__ = "MIT Center for Bits and Atoms"
 __email__ = "ricfulop@mit.edu"

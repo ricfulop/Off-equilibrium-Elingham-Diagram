@@ -66,6 +66,67 @@ class ThermodynamicEngine:
         
         return DG_eff
     
+    def calc_off_equilibrium_DG_with_validation(self, oxide_key: str, T_K: np.ndarray, 
+                                               E: float, r: float) -> Tuple[np.ndarray, Dict]:
+        """
+        Calculate off-equilibrium DG with comprehensive validation.
+        
+        Args:
+            oxide_key: Oxide identifier
+            T_K: Temperature array in Kelvin
+            E: Electric field in V/m
+            r: Particle radius in m
+            
+        Returns:
+            Tuple of (DG_eff array, validation_results)
+        """
+        from scientific_data import get_parameter_with_validation, W_PH_CONSTANTS_SCIENTIFIC
+        from validation_module import ValidationEngine
+        
+        validation_results = {
+            'warnings': [],
+            'errors': [],
+            'confidence': 'high',
+            'parameter_sources': {}
+        }
+        
+        # Validate input parameters
+        if E < 0 or E > 5e6:  # 5 MV/m upper limit
+            validation_results['errors'].append(f"Electric field {E/1e6:.1f} MV/m outside valid range (0-5 MV/m)")
+            validation_results['confidence'] = 'low'
+        
+        if r < 1e-8 or r > 1e-4:  # 0.01 μm to 100 μm
+            validation_results['errors'].append(f"Particle radius {r*1e6:.1f} μm outside valid range (0.01-100 μm)")
+            validation_results['confidence'] = 'low'
+        
+        # Get scientific parameters with validation
+        W_ph, warning = get_parameter_with_validation(
+            W_PH_CONSTANTS_SCIENTIFIC, oxide_key, T_K[0], 20.0
+        )
+        if warning:
+            validation_results['warnings'].append(warning)
+            validation_results['confidence'] = 'medium'
+        
+        validation_results['parameter_sources']['W_ph'] = {
+            'value': W_ph,
+            'source': W_PH_CONSTANTS_SCIENTIFIC.get(oxide_key, {}).source if oxide_key in W_PH_CONSTANTS_SCIENTIFIC else 'default'
+        }
+        
+        # Calculate off-equilibrium DG
+        DG_eq = self.calc_equilibrium_DG(oxide_key, T_K)
+        electric_contribution = -(4 * FARADAY_CONSTANT * E * r) / 1000  # Assume 4 electrons
+        DG_eff = DG_eq + electric_contribution - W_ph
+        
+        # Validate against experimental data
+        validation_engine = ValidationEngine()
+        for i, T in enumerate(T_K):
+            flash_validation = validation_engine.validate_flash_conditions(oxide_key, T, E)
+            if not flash_validation['valid']:
+                validation_results['warnings'].append(f"T={T:.0f}K: {flash_validation['warning']}")
+                validation_results['confidence'] = 'medium'
+        
+        return DG_eff, validation_results
+    
     def calc_equilibrium_DG_normalized(self, material_name: str, T_K: np.ndarray, 
                                       normalization: str = 'auto') -> Tuple[np.ndarray, str]:
         """Calculate normalized Gibbs free energy.
@@ -581,6 +642,286 @@ class ThermodynamicEngine:
         }
         
         return validation
+
+    def calc_kinetic_analysis(self, oxide_key: str, T_K: np.ndarray, E: float, r: float, 
+                             p_h2: float = 0.25, flash_state: bool = True) -> Dict:
+        """
+        Comprehensive kinetic analysis for reduction process with flash enhancement.
+        
+        Args:
+            oxide_key: Oxide identifier
+            T_K: Temperature array in Kelvin
+            E: Electric field in V/m
+            r: Particle radius in m
+            p_h2: H₂ partial pressure in atm
+            flash_state: Whether particles are in flash state
+            
+        Returns:
+            Dictionary with kinetic analysis results
+        """
+        from scientific_data import DIFFUSION_PARAMETERS_SCIENTIFIC, FLASH_ENHANCEMENT_SCIENTIFIC
+        from validation_module import ValidationEngine
+        
+        kinetics = ValidationEngine()
+        
+        # Get kinetic parameters from scientific data
+        if oxide_key in DIFFUSION_PARAMETERS_SCIENTIFIC:
+            diff_params = DIFFUSION_PARAMETERS_SCIENTIFIC[oxide_key]
+            Ea = diff_params['activation_energy'].value
+            A = diff_params['pre_exponential'].value
+            alpha = diff_params['field_enhancement'].value
+        else:
+            # Default values if not available
+            Ea = 200.0
+            A = 1e11
+            alpha = 0.1
+        
+        if oxide_key in FLASH_ENHANCEMENT_SCIENTIFIC:
+            beta = FLASH_ENHANCEMENT_SCIENTIFIC[oxide_key].value
+            T_flash = 1200  # Default flash temperature
+        else:
+            beta = 30.0
+            T_flash = 1200
+        
+        # Calculate kinetic parameters
+        R = 8.314e-3  # kJ/(mol·K)
+        
+        # Arrhenius rate constant
+        k_arrhenius = A * np.exp(-Ea / (R * T_K))
+        
+        # H₂ pressure dependence
+        h2_dependence = p_h2
+        
+        # Electric field enhancement
+        field_enhancement = 1 + alpha * E * r / 1e6
+        
+        # Flash diffusion enhancement
+        if flash_state:
+            temp_enhancement = np.where(
+                T_K >= T_flash,
+                np.exp((T_K - T_flash) / 200),
+                1.0
+            )
+            field_enhancement_flash = (E / 1e6) ** 0.5
+            flash_enhancement = 1 + beta * temp_enhancement * field_enhancement_flash
+        else:
+            flash_enhancement = 1.0
+        
+        # Total reduction rate
+        reduction_rate = k_arrhenius * h2_dependence * field_enhancement * flash_enhancement
+        
+        # Calculate conversion time (first-order kinetics)
+        conversion_time = -np.log(0.05) / reduction_rate  # 95% conversion
+        
+        # Calculate throughput capacity (assuming 1 L reactor)
+        reactor_volume = 0.001  # m³
+        particle_density = 4000  # kg/m³
+        particle_volume = (4/3) * np.pi * r**3
+        particle_mass = particle_density * particle_volume
+        max_particles = reactor_volume / particle_volume
+        throughput_capacity = (max_particles * particle_mass) / conversion_time * 3600  # kg/hr
+        
+        # Validate against experimental data
+        validation_results = {}
+        for i, T in enumerate(T_K):
+            flash_validation = kinetics.validate_flash_conditions(oxide_key, T, E)
+            validation_results[f'T_{T:.0f}K'] = flash_validation
+        
+        return {
+            'oxide_key': oxide_key,
+            'temperature_K': T_K,
+            'temperature_C': T_K - 273.15,
+            'electric_field_MV_m': E / 1e6,
+            'particle_radius_um': r * 1e6,
+            'h2_partial_pressure_atm': p_h2,
+            'flash_state': flash_state,
+            'activation_energy_kJ_mol': Ea,
+            'pre_exponential_factor_s': A,
+            'field_enhancement_factor': alpha,
+            'flash_diffusion_factor': beta,
+            'flash_temperature_threshold_K': T_flash,
+            'flash_temperature_threshold_C': T_flash - 273.15,
+            'reduction_rate_s': reduction_rate,
+            'conversion_time_95pct_s': conversion_time,
+            'throughput_capacity_kg_hr': throughput_capacity,
+            'field_enhancement_factor_calc': field_enhancement,
+            'flash_enhancement_factor': flash_enhancement,
+            'total_enhancement_factor': field_enhancement * flash_enhancement,
+            'validation_results': validation_results
+        }
+
+    def calc_residence_time_analysis(self, oxide_key: str, T_K: float, E: float, r: float, 
+                                    p_h2: float = 0.25, tube_length: float = 0.30, 
+                                    tube_diameter: float = 0.05, gas_velocity: float = 1.0,
+                                    particle_density: float = 4000) -> Dict:
+        """
+        Calculate particle residence time analysis and reduction completion.
+        
+        Args:
+            oxide_key: Oxide identifier
+            T_K: Temperature in Kelvin
+            E: Electric field in V/m
+            r: Particle radius in m
+            p_h2: H₂ partial pressure in atm
+            tube_length: Reactor tube length in m
+            tube_diameter: Reactor tube diameter in m
+            gas_velocity: Gas velocity in m/s
+            particle_density: Particle density in kg/m³
+            
+        Returns:
+            Dictionary with residence time analysis results
+        """
+        from scientific_data import DIFFUSION_PARAMETERS_SCIENTIFIC, FLASH_ENHANCEMENT_SCIENTIFIC
+        from validation_module import ValidationEngine
+        
+        kinetics = ValidationEngine()
+        
+        # Get kinetic parameters (adjusted for plasma flash sintering)
+        if oxide_key in DIFFUSION_PARAMETERS_SCIENTIFIC:
+            diff_params = DIFFUSION_PARAMETERS_SCIENTIFIC[oxide_key]
+            Ea = diff_params['activation_energy'].value * 0.3  # Reduce activation energy for plasma
+            A = diff_params['pre_exponential'].value * 1e12  # Much higher pre-exponential for plasma
+            alpha = diff_params['field_enhancement'].value
+        else:
+            Ea = 60.0  # Much lower activation energy for plasma conditions
+            A = 1e20  # Very high pre-exponential for plasma conditions
+            alpha = 0.1
+        
+        if oxide_key in FLASH_ENHANCEMENT_SCIENTIFIC:
+            beta = FLASH_ENHANCEMENT_SCIENTIFIC[oxide_key].value
+            T_flash = 1200
+        else:
+            beta = 30.0
+            T_flash = 1200
+        
+        # Calculate residence time
+        residence_time = tube_length / gas_velocity  # seconds
+        
+        # Calculate particle settling velocity (Stokes law)
+        g = 9.81  # m/s²
+        air_viscosity = 1.8e-5  # Pa·s at high temperature
+        particle_volume = (4/3) * np.pi * r**3
+        particle_mass = particle_density * particle_volume
+        settling_velocity = (2 * particle_mass * g) / (6 * np.pi * air_viscosity * r)
+        
+        # Effective residence time (accounting for settling)
+        effective_residence_time = tube_length / (gas_velocity + settling_velocity)
+        
+        # Calculate reduction kinetics
+        R = 8.314e-3  # kJ/(mol·K)
+        
+        # Check if in flash state
+        in_flash_state = T_K >= T_flash
+        
+        # Arrhenius rate constant
+        k_arrhenius = A * np.exp(-Ea / (R * T_K))
+        
+        # Enhancement factors
+        field_enhancement = 1 + alpha * E * r / 1e6
+        
+        if in_flash_state:
+            temp_enhancement = np.exp((T_K - T_flash) / 200)
+            field_enhancement_flash = (E / 1e6) ** 0.5
+            flash_enhancement = 1 + beta * temp_enhancement * field_enhancement_flash
+        else:
+            flash_enhancement = 1.0
+        
+        # Total reduction rate
+        reduction_rate = k_arrhenius * p_h2 * field_enhancement * flash_enhancement
+        
+        # Calculate conversion percentage at exit time
+        # Using first-order kinetics: C(t) = C₀ * exp(-k*t)
+        conversion_at_exit = 1 - np.exp(-reduction_rate * effective_residence_time)
+        conversion_percentage = conversion_at_exit * 100
+        
+        # Calculate time for 95% conversion
+        time_95pct = -np.log(0.05) / reduction_rate
+        
+        # Calculate time for 99% conversion
+        time_99pct = -np.log(0.01) / reduction_rate
+        
+        # Determine reduction status
+        if conversion_percentage >= 95:
+            reduction_status = "Complete"
+            status_color = "success"
+        elif conversion_percentage >= 80:
+            reduction_status = "Near Complete"
+            status_color = "warning"
+        elif conversion_percentage >= 50:
+            reduction_status = "Partial"
+            status_color = "warning"
+        else:
+            reduction_status = "Incomplete"
+            status_color = "danger"
+        
+        # Calculate thermodynamic feasibility
+        DG_eq = self.calc_equilibrium_DG(oxide_key, np.array([T_K]))
+        electric_contribution = -(4 * FARADAY_CONSTANT * E * r) / 1000
+        W_ph = self._get_W_ph(oxide_key)
+        DG_eff = DG_eq + electric_contribution - W_ph
+        
+        # Determine thermodynamic feasibility
+        if DG_eff < 0:
+            thermo_feasible = True
+            thermo_status = "Thermodynamically Favorable"
+            thermo_color = "success"
+        else:
+            thermo_feasible = False
+            thermo_status = "Thermodynamically Unfavorable"
+            thermo_color = "danger"
+        
+        # Calculate process efficiency
+        if thermo_feasible and conversion_percentage >= 95:
+            process_efficiency = "High"
+            efficiency_color = "success"
+        elif thermo_feasible and conversion_percentage >= 80:
+            process_efficiency = "Medium"
+            efficiency_color = "warning"
+        elif thermo_feasible:
+            process_efficiency = "Low"
+            efficiency_color = "warning"
+        else:
+            process_efficiency = "Not Feasible"
+            efficiency_color = "danger"
+        
+        # Validate against experimental data
+        flash_validation = kinetics.validate_flash_conditions(oxide_key, T_K, E)
+        
+        return {
+            'oxide_key': oxide_key,
+            'temperature_K': T_K,
+            'temperature_C': T_K - 273.15,
+            'electric_field_MV_m': E / 1e6,
+            'particle_radius_um': r * 1e6,
+            'h2_partial_pressure_atm': p_h2,
+            'tube_length_m': tube_length,
+            'tube_diameter_m': tube_diameter,
+            'gas_velocity_m_s': gas_velocity,
+            'particle_density_kg_m3': particle_density,
+            'residence_time_s': residence_time,
+            'settling_velocity_m_s': settling_velocity,
+            'effective_residence_time_s': effective_residence_time,
+            'reduction_rate_s': reduction_rate,
+            'conversion_percentage': conversion_percentage,
+            'conversion_at_exit': conversion_at_exit,
+            'time_95pct_conversion_s': time_95pct,
+            'time_99pct_conversion_s': time_99pct,
+            'reduction_status': reduction_status,
+            'reduction_status_color': status_color,
+            'thermodynamic_feasible': thermo_feasible,
+            'thermodynamic_status': thermo_status,
+            'thermodynamic_status_color': thermo_color,
+            'DG_eff_kJ_per_molO2': DG_eff,
+            'process_efficiency': process_efficiency,
+            'process_efficiency_color': efficiency_color,
+            'in_flash_state': in_flash_state,
+            'flash_temperature_threshold_K': T_flash,
+            'flash_temperature_threshold_C': T_flash - 273.15,
+            'field_enhancement_factor': field_enhancement,
+            'flash_enhancement_factor': flash_enhancement,
+            'total_enhancement_factor': field_enhancement * flash_enhancement,
+            'validation_results': flash_validation
+        }
 
 
 def test_thermodynamic_engine():
