@@ -1,6 +1,6 @@
 # Off-Equilibrium Ellingham Diagram Interactive Dash App
 
-[![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
+[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)](https://github.com/ricfulop/Off-equilibrium-Elingham-Diagram)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 
@@ -8,7 +8,7 @@ An interactive web application for visualizing equilibrium and off-equilibrium E
 
 **Author**: Ric Fulop  
 **Affiliation**: MIT Center for Bits and Atoms  
-**Version**: 1.7.0
+**Version**: 1.8.0
 
 ## Overview
 
@@ -34,6 +34,22 @@ This application implements the novel **off-equilibrium thermodynamics model** f
 - **Industrial Processing Analysis**: Carrier gas flow calculations (N₂ or Ar) update automatically
 - **Real-time Analysis**: Instant thermodynamic feasibility assessment
 - **Data Export**: Export calculated data for further analysis
+
+## Recent Updates (v1.8.0)
+
+### Custom Compound Definition (v1.8.0)
+- **Complete Custom Compound System**: Define your own materials with custom thermodynamic parameters
+- **Template System**: Pre-defined templates for TiO2 and Al2O3 for quick start
+- **Search & Filter**: Advanced search and category filtering for compound management
+- **Import/Export**: JSON-based compound database sharing and backup
+- **Validation System**: Comprehensive data validation with error reporting
+- **Seamless Integration**: Custom compounds work with existing thermodynamic engine
+
+### Enhanced Data Management
+- **CustomCompound Dataclass**: Complete thermodynamic parameter storage
+- **CustomCompoundManager**: Database management with JSON persistence
+- **Validation Engine**: Temperature range and parameter consistency checks
+- **Professional UI**: Bootstrap-styled modal and management panel
 
 ## Recent Updates (v1.7.0)
 

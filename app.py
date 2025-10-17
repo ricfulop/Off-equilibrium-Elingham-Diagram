@@ -27,6 +27,14 @@ from utils import (
 )
 from config import DEFAULT_FIELD_PRESETS, DEFAULT_RADIUS_PRESETS, DEFAULT_TEMP_RANGE, TEMP_MARKERS, GAS_RATIO_TEMPS
 
+# Import custom compound modules
+from custom_compounds import CustomCompound, CustomCompoundManager, create_compound_from_template
+from custom_compound_ui import (
+    create_custom_compound_modal, create_custom_compound_management_panel,
+    create_custom_compound_list_item, create_custom_compound_validation_alert,
+    create_custom_compound_export_data, parse_custom_compound_import_data
+)
+
 # Initialize Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 app.title = "Off-Equilibrium Ellingham Diagrams"
@@ -35,6 +43,9 @@ app.title = "Off-Equilibrium Ellingham Diagrams"
 print("Loading JANAF thermodynamic data...")
 data_loader = load_janaf_data()
 thermo_engine = ThermodynamicEngine(data_loader)
+
+# Initialize custom compound manager
+custom_compound_manager = CustomCompoundManager()
 
 # Get categories data for material selector
 categories_data = data_loader.get_categories_data()
@@ -204,7 +215,7 @@ app.layout = dbc.Container([
                                 {"label": "CO/O₂", "value": "CO_O2"},
                                 {"label": "CH₄/H₂", "value": "CH4_H2"}
                             ],
-                            value=["H2_H2O", "CO_CO2"],
+                            value=["H2_H2O", "CO_CO2", "pO2"],
                             inline=False,
                             className="gas-scale-checklist"
                         )
@@ -253,7 +264,28 @@ app.layout = dbc.Container([
                         'displaylogo': False,
                         'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
                     }
-                )
+                ),
+                # Export buttons
+                html.Div([
+                    dbc.ButtonGroup([
+                        dbc.Button(
+                            "Export as SVG",
+                            id="export-svg-btn",
+                            color="primary",
+                            size="sm",
+                            className="me-1"
+                        ),
+                        dbc.Button(
+                            "Export as PDF",
+                            id="export-pdf-btn",
+                            color="secondary",
+                            size="sm"
+                        )
+                    ], className="mt-2")
+                ], className="d-flex justify-content-end"),
+                # Download components
+                dcc.Download(id="download-svg"),
+                dcc.Download(id="download-pdf")
             ], className="plot-container")
         ], width=9)
     ]),
@@ -266,7 +298,17 @@ app.layout = dbc.Container([
                     html.Div(id="info-panel-content")
                 ], className="info-panel")
             ], width=12)
-        ], className="mt-3")
+        ], className="mt-3"),
+        
+        # Custom Compound Management Panel
+        dbc.Row([
+            dbc.Col([
+                create_custom_compound_management_panel()
+            ], width=12)
+        ], className="mt-3"),
+        
+        # Custom Compound Modal
+        create_custom_compound_modal()
 ], fluid=True)
 
 
@@ -404,7 +446,7 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
     
     # Get particle radius
     if radius_radio == 'custom':
-        r_um = radius_custom if radius_custom is not None else 5.0  # Default to 5.0 μm if custom is empty if radius_custom is not None else 5.0  # Default to 5.0 μm if custom is empty
+        r_um = radius_custom if radius_custom is not None else 5.0  # Default to 5.0 μm if custom is empty
     else:
         r_um = radius_radio
     
@@ -947,6 +989,430 @@ def update_validation_status(field_MV_m, radius_radio, radius_custom):
         html.Br(),
         html.Small(f"Field: {field_MV_m:.1f} MV/m, Radius: {r_um:.1f} μm", className="text-muted")
     ])
+
+
+# SVG Export callback
+@app.callback(
+    Output('download-svg', 'data'),
+    Input('export-svg-btn', 'n_clicks'),
+    State('ellingham-plot', 'figure'),
+    prevent_initial_call=True
+)
+def export_svg(n_clicks, figure):
+    """Export current plot as SVG file with publication-quality formatting."""
+    if not figure or n_clicks is None:
+        return None
+    
+    # Convert figure dict to Plotly figure object
+    import plotly.graph_objects as go
+    export_figure = go.Figure(figure)
+    
+    # Optimize layout for publication quality
+    export_figure.update_layout(
+        # Increase margins to prevent text overlap
+        margin=dict(l=80, r=200, t=80, b=80),
+        
+        # Optimize legend for publication
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=10),
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="rgba(0,0,0,0.2)",
+            borderwidth=1,
+            itemwidth=30,
+            itemsizing="constant"
+        ),
+        
+        # Improve title and axis formatting
+        title=dict(
+            font=dict(size=16, family="Arial, sans-serif"),
+            x=0.5,
+            xanchor="center"
+        ),
+        
+        # Optimize axis labels
+        xaxis=dict(
+            title_font=dict(size=12, family="Arial, sans-serif"),
+            tickfont=dict(size=10, family="Arial, sans-serif"),
+            showgrid=True,
+            gridcolor='rgba(128,128,128,0.2)',
+            gridwidth=0.5
+        ),
+        
+        yaxis=dict(
+            title_font=dict(size=12, family="Arial, sans-serif"),
+            tickfont=dict(size=10, family="Arial, sans-serif"),
+            showgrid=True,
+            gridcolor='rgba(128,128,128,0.2)',
+            gridwidth=0.5
+        ),
+        
+        # Optimize secondary y-axis for gas scales
+        yaxis2=dict(
+            title_font=dict(size=12, family="Arial, sans-serif"),
+            tickfont=dict(size=10, family="Arial, sans-serif"),
+            showgrid=True,
+            gridcolor='rgba(128,128,128,0.1)',
+            gridwidth=0.5
+        ),
+        
+        # Set figure size for publication quality
+        width=1000,
+        height=700,
+        
+        # Improve overall appearance
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        
+        # Optimize hover behavior for SVG
+        hovermode='closest',
+        hoverlabel=dict(
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="rgba(0,0,0,0.3)",
+            font_size=10,
+            font_family="Arial, sans-serif"
+        )
+    )
+    
+    # Convert figure to SVG string with high quality
+    import plotly.io as pio
+    svg_bytes = pio.to_image(export_figure, format='svg', width=1000, height=700, scale=2)
+    
+    # Return as downloadable file
+    return dict(
+        content=svg_bytes.decode('utf-8'),
+        filename='ellingham_diagram.svg',
+        type='image/svg+xml'
+    )
+
+
+# PDF Export callback
+@app.callback(
+    Output('download-pdf', 'data'),
+    Input('export-pdf-btn', 'n_clicks'),
+    State('ellingham-plot', 'figure'),
+    prevent_initial_call=True
+)
+def export_pdf(n_clicks, figure):
+    """Export current plot as PDF file with publication-quality formatting."""
+    if not figure or n_clicks is None:
+        return None
+    
+    # Convert figure dict to Plotly figure object
+    import plotly.graph_objects as go
+    export_figure = go.Figure(figure)
+    
+    # Optimize layout for PDF publication quality
+    export_figure.update_layout(
+        # Optimize margins for PDF printing
+        margin=dict(l=100, r=150, t=100, b=100),
+        
+        # Optimize legend for PDF
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=11),
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="rgba(0,0,0,0.3)",
+            borderwidth=1,
+            itemwidth=35,
+            itemsizing="constant"
+        ),
+        
+        # Improve title and axis formatting for PDF
+        title=dict(
+            font=dict(size=18, family="Arial, sans-serif"),
+            x=0.5,
+            xanchor="center"
+        ),
+        
+        # Optimize axis labels for PDF
+        xaxis=dict(
+            title_font=dict(size=14, family="Arial, sans-serif"),
+            tickfont=dict(size=12, family="Arial, sans-serif"),
+            showgrid=True,
+            gridcolor='rgba(128,128,128,0.3)',
+            gridwidth=0.8
+        ),
+        
+        yaxis=dict(
+            title_font=dict(size=14, family="Arial, sans-serif"),
+            tickfont=dict(size=12, family="Arial, sans-serif"),
+            showgrid=True,
+            gridcolor='rgba(128,128,128,0.3)',
+            gridwidth=0.8
+        ),
+        
+        # Optimize secondary y-axis for gas scales (PDF)
+        yaxis2=dict(
+            title_font=dict(size=14, family="Arial, sans-serif"),
+            tickfont=dict(size=12, family="Arial, sans-serif"),
+            showgrid=True,
+            gridcolor='rgba(128,128,128,0.2)',
+            gridwidth=0.8
+        ),
+        
+        # Set figure size for PDF publication quality
+        width=1200,
+        height=800,
+        
+        # Improve overall appearance for PDF
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        
+        # Optimize hover behavior for PDF
+        hovermode='closest',
+        hoverlabel=dict(
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor="rgba(0,0,0,0.4)",
+            font_size=11,
+            font_family="Arial, sans-serif"
+        )
+    )
+    
+    # Convert figure to PDF bytes with high quality
+    import plotly.io as pio
+    pdf_bytes = pio.to_image(export_figure, format='pdf', width=1200, height=800, scale=2)
+    
+    # Return as downloadable file
+    return dict(
+        content=pdf_bytes,
+        filename='ellingham_diagram.pdf',
+        type='application/pdf'
+    )
+
+
+# Custom Compound Callbacks
+
+@app.callback(
+    Output("custom-compound-modal", "is_open"),
+    [Input("add-custom-compound-btn", "n_clicks"),
+     Input("custom-save-btn", "n_clicks"),
+     Input("custom-cancel-btn", "n_clicks")],
+    [State("custom-compound-modal", "is_open")]
+)
+def toggle_custom_compound_modal(add_clicks, save_clicks, cancel_clicks, is_open):
+    """Toggle custom compound modal visibility."""
+    if add_clicks or save_clicks or cancel_clicks:
+        return not is_open
+    return is_open
+
+
+@app.callback(
+    Output("custom-compounds-list", "children"),
+    [Input("custom-search", "value"),
+     Input("custom-category-filter", "value"),
+     Input("add-custom-compound-btn", "n_clicks"),
+     Input("custom-save-btn", "n_clicks")]
+)
+def update_custom_compounds_list(search_query, category_filter, add_clicks, save_clicks):
+    """Update the custom compounds list display."""
+    compounds = custom_compound_manager.get_all_compounds()
+    
+    # Apply search filter
+    if search_query:
+        compounds = custom_compound_manager.search_compounds(search_query)
+    
+    # Apply category filter
+    if category_filter:
+        compounds = {name: compound for name, compound in compounds.items() 
+                    if compound.category == category_filter}
+    
+    if not compounds:
+        return dbc.Alert(
+            "No custom compounds found. Click 'Add New Compound' to get started.",
+            color="info",
+            className="text-center"
+        )
+    
+    # Create list items
+    list_items = []
+    for i, (name, compound) in enumerate(compounds.items()):
+        list_items.append(create_custom_compound_list_item(compound, i))
+    
+    return list_items
+
+
+@app.callback(
+    [Output("custom-name", "value"),
+     Output("custom-formula", "value"),
+     Output("custom-element", "value"),
+     Output("custom-category", "value"),
+     Output("custom-dg-a", "value"),
+     Output("custom-dg-b", "value"),
+     Output("custom-dg-c", "value"),
+     Output("custom-dg-d", "value"),
+     Output("custom-temp-min", "value"),
+     Output("custom-temp-max", "value"),
+     Output("custom-mw", "value"),
+     Output("custom-density", "value"),
+     Output("custom-wph", "value"),
+     Output("custom-source", "value"),
+     Output("custom-confidence", "value"),
+     Output("custom-notes", "value")],
+    [Input("load-template-btn", "n_clicks")],
+    [State("custom-template", "value")]
+)
+def load_template_data(n_clicks, template_name):
+    """Load template data into form fields."""
+    if not n_clicks or not template_name:
+        return [None] * 16
+    
+    try:
+        compound = create_compound_from_template(template_name)
+        
+        return [
+            compound.name,
+            compound.formula,
+            compound.element,
+            compound.category,
+            compound.dg_coefficients[0],
+            compound.dg_coefficients[1],
+            compound.dg_coefficients[2],
+            compound.dg_coefficients[3],
+            compound.temperature_range[0],
+            compound.temperature_range[1],
+            compound.molecular_weight,
+            compound.density,
+            compound.w_ph_constant,
+            compound.source,
+            compound.confidence_level,
+            compound.notes
+        ]
+    except Exception as e:
+        print(f"Error loading template: {e}")
+        return [None] * 16
+
+
+@app.callback(
+    Output("custom-validation-alert", "children"),
+    Output("custom-validation-alert", "is_open"),
+    [Input("custom-save-btn", "n_clicks")],
+    [State("custom-name", "value"),
+     State("custom-formula", "value"),
+     State("custom-element", "value"),
+     State("custom-category", "value"),
+     State("custom-dg-a", "value"),
+     State("custom-dg-b", "value"),
+     State("custom-dg-c", "value"),
+     State("custom-dg-d", "value"),
+     State("custom-temp-min", "value"),
+     State("custom-temp-max", "value"),
+     State("custom-mw", "value"),
+     State("custom-density", "value"),
+     State("custom-wph", "value"),
+     State("custom-source", "value"),
+     State("custom-confidence", "value"),
+     State("custom-notes", "value")]
+)
+def validate_and_save_custom_compound(n_clicks, name, formula, element, category, dg_a, dg_b, dg_c, dg_d,
+                                    temp_min, temp_max, mw, density, wph, source, confidence, notes):
+    """Validate and save custom compound."""
+    if not n_clicks:
+        return "", False
+    
+    # Prepare compound data
+    compound_data = {
+        'name': name or '',
+        'formula': formula or '',
+        'element': element or '',
+        'category': category or 'oxide',
+        'dg_coefficients': [dg_a or 0, dg_b or 0, dg_c or 0, dg_d or 0],
+        'temperature_range': [temp_min or 298, temp_max or 2000],
+        'molecular_weight': mw or 100,
+        'density': density or 1000,
+        'w_ph_constant': wph or 20,
+        'diffusion_enhancement': 1.0,
+        'source': source or 'User-defined',
+        'confidence_level': confidence or 'medium',
+        'notes': notes or '',
+        'created_date': '2025-01-27T00:00:00',
+        'last_modified': '2025-01-27T00:00:00'
+    }
+    
+    # Validate data
+    is_valid, errors = custom_compound_manager.validate_compound_data(compound_data)
+    
+    if not is_valid:
+        return create_custom_compound_validation_alert(errors), True
+    
+    # Create and save compound
+    try:
+        compound = CustomCompound.from_dict(compound_data)
+        success = custom_compound_manager.add_compound(compound)
+        
+        if success:
+            return create_custom_compound_validation_alert([]), True
+        else:
+            return create_custom_compound_validation_alert(["Failed to save compound"]), True
+            
+    except Exception as e:
+        return create_custom_compound_validation_alert([f"Error creating compound: {str(e)}"]), True
+
+
+@app.callback(
+    Output("download-compounds", "data"),
+    Input("export-compounds-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def export_custom_compounds(n_clicks):
+    """Export custom compounds to JSON file."""
+    if not n_clicks:
+        return None
+    
+    compounds = custom_compound_manager.get_all_compounds()
+    export_data = create_custom_compound_export_data(compounds)
+    
+    return dict(
+        content=export_data,
+        filename="custom_compounds.json",
+        type="application/json"
+    )
+
+
+@app.callback(
+    Output("custom-compounds-list", "children", allow_duplicate=True),
+    Input("upload-compounds", "contents"),
+    prevent_initial_call=True
+)
+def import_custom_compounds(contents):
+    """Import custom compounds from uploaded file."""
+    if not contents:
+        return None
+    
+    try:
+        import base64
+        import json
+        
+        # Decode uploaded content
+        content_type, content_string = contents.split(',')
+        decoded = base64.b64decode(content_string).decode('utf-8')
+        
+        # Parse and import compounds
+        success, messages, compounds = parse_custom_compound_import_data(decoded)
+        
+        if success:
+            # Add compounds to manager
+            for name, compound in compounds.items():
+                custom_compound_manager.add_compound(compound)
+            
+            # Update display
+            return update_custom_compounds_list(None, None, None, None)
+        else:
+            return dbc.Alert([
+                html.H6("Import Failed"),
+                html.Ul([html.Li(msg) for msg in messages])
+            ], color="danger")
+            
+    except Exception as e:
+        return dbc.Alert(f"Import error: {str(e)}", color="danger")
 
 
 if __name__ == '__main__':
