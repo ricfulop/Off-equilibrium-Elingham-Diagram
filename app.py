@@ -53,21 +53,47 @@ USERNAME_PASSWORD_PAIRS = {
 # Apply authentication
 auth = BasicAuth(app, USERNAME_PASSWORD_PAIRS)
 
-# Load data
+# Add health check endpoint
+@app.server.route('/health')
+def health_check():
+    """Health check endpoint for Railway deployment."""
+    return {'status': 'healthy', 'version': '2.0.0', 'auth': 'enabled'}, 200
+
+# Load data with error handling
 print("Loading JANAF thermodynamic data...")
-data_loader = load_janaf_data()
-thermo_engine = ThermodynamicEngine(data_loader)
+try:
+    data_loader = load_janaf_data()
+    thermo_engine = ThermodynamicEngine(data_loader)
+    print("✅ JANAF data loaded successfully")
+except Exception as e:
+    print(f"❌ Error loading JANAF data: {e}")
+    print("App will start with limited functionality")
+    # Create a minimal data loader for graceful degradation
+    data_loader = None
+    thermo_engine = None
 
 # Initialize custom compound manager
 custom_compound_manager = CustomCompoundManager()
 
-# Get categories data for material selector
-categories_data = data_loader.get_categories_data()
-print(f"Loaded {data_loader.raw_data['metadata']['total_compounds']} compounds across {len(categories_data)} categories")
+# Get categories data for material selector (with error handling)
+if data_loader:
+    try:
+        categories_data = data_loader.get_categories_data()
+        print(f"Loaded {data_loader.raw_data['metadata']['total_compounds']} compounds across {len(categories_data)} categories")
+    except Exception as e:
+        print(f"❌ Error getting categories data: {e}")
+        categories_data = {}
+else:
+    print("⚠️ Using empty categories data due to data loading error")
+    categories_data = {}
 
-# Get default materials
-default_materials = get_default_materials()
-print(f"Default materials: {default_materials}")
+# Get default materials (with error handling)
+try:
+    default_materials = get_default_materials()
+    print(f"Default materials: {default_materials}")
+except Exception as e:
+    print(f"❌ Error getting default materials: {e}")
+    default_materials = []
 
 # App layout
 app.layout = dbc.Container([

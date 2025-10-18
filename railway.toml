@@ -3,7 +3,7 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "python app.py"
-healthcheckPath = "/"
+healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 
@@ -15,3 +15,4 @@ RESEARCHER_USER = "researcher"
 RESEARCHER_PASS = "research_access_2025"
 STUDENT_USER = "student"
 STUDENT_PASS = "student_access_2025"
+DEBUG = "False"
