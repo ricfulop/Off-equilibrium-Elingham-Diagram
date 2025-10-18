@@ -6,6 +6,7 @@ startCommand = "python app.py"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
 
 [env]
 PORT = "8050"
@@ -16,3 +17,4 @@ RESEARCHER_PASS = "research_access_2025"
 STUDENT_USER = "student"
 STUDENT_PASS = "student_access_2025"
 DEBUG = "False"
+PYTHONUNBUFFERED = "1"
