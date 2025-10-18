@@ -190,7 +190,7 @@ The PFR uses:
    ```
 
 5. **Access the web interface**:
-   - Open your browser and navigate to `http://localhost:8050`
+   - Open your browser and navigate to `http://localhost:8051` (local development port)
 
 ## Usage Guide
 

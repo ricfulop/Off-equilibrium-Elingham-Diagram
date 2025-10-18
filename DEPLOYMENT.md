@@ -83,7 +83,7 @@ python app.py
 ```
 
 ### **Access Locally**
-- **URL**: `http://localhost:8051`
+- **URL**: `http://localhost:8051` (local development port)
 - **Login**: Use any of the three username/password combinations
 
 ## 🛡️ Security Features

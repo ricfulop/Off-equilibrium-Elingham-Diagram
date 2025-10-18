@@ -1446,7 +1446,9 @@ def import_custom_compounds(contents):
 
 
 if __name__ == '__main__':
-    # Use environment PORT for Railway deployment, fallback to 8051 for local
+    # Port configuration:
+    # - Railway deployment: Uses PORT=8050 (set in railway.toml)
+    # - Local development: Uses port 8051 (to avoid conflicts with other apps)
     port = int(os.getenv('PORT', 8051))
     debug = os.getenv('DEBUG', 'True').lower() == 'true'
     app.run(debug=debug, host='0.0.0.0', port=port)
