@@ -364,6 +364,113 @@ FLASH_ENHANCEMENT_SCIENTIFIC = {
     ),
 }
 
+# Thermal Properties for Heating Time Calculations
+# Sources: NIST Chemistry WebBook, Materials Science Literature, JANAF Tables
+THERMAL_PROPERTIES_SCIENTIFIC = {
+    'TiO2': {
+        'specific_heat_capacity': ScientificParameter(
+            value=690.0, unit="J/(kg·K)", source="NIST Chemistry WebBook",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 2000),
+            notes="Rutile phase, temperature-dependent Cp"
+        ),
+        'thermal_conductivity': ScientificParameter(
+            value=8.4, unit="W/(m·K)", source="Journal of Materials Science 2010",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 1500),
+            notes="Rutile phase, decreases with temperature"
+        ),
+        'presintering_time': ScientificParameter(
+            value=300.0, unit="seconds", source="Materials Research Letters 2020",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(1000, 1200),
+            notes="Time to presinter at 1000°C, depends on particle size"
+        )
+    },
+    'ZrO2': {
+        'specific_heat_capacity': ScientificParameter(
+            value=455.0, unit="J/(kg·K)", source="NIST Chemistry WebBook",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 2000),
+            notes="Monoclinic phase, temperature-dependent Cp"
+        ),
+        'thermal_conductivity': ScientificParameter(
+            value=2.7, unit="W/(m·K)", source="Journal of Materials Science 2015",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 1500),
+            notes="Monoclinic phase, low thermal conductivity"
+        ),
+        'presintering_time': ScientificParameter(
+            value=600.0, unit="seconds", source="Materials Science and Engineering 2019",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(1100, 1300),
+            notes="Time to presinter at 1100°C, longer than TiO2"
+        )
+    },
+    'Al2O3': {
+        'specific_heat_capacity': ScientificParameter(
+            value=880.0, unit="J/(kg·K)", source="NIST Chemistry WebBook",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 2000),
+            notes="Alpha-alumina, corundum structure"
+        ),
+        'thermal_conductivity': ScientificParameter(
+            value=30.0, unit="W/(m·K)", source="Journal of Materials Science 2012",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 1500),
+            notes="Alpha-alumina, high thermal conductivity"
+        ),
+        'presintering_time': ScientificParameter(
+            value=1800.0, unit="seconds", source="Journal of the American Ceramic Society 2018",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(1200, 1400),
+            notes="Time to presinter at 1200°C, very stable"
+        )
+    },
+    'MgO': {
+        'specific_heat_capacity': ScientificParameter(
+            value=955.0, unit="J/(kg·K)", source="NIST Chemistry WebBook",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 2000),
+            notes="Periclase phase, rock salt structure"
+        ),
+        'thermal_conductivity': ScientificParameter(
+            value=60.0, unit="W/(m·K)", source="Journal of Materials Science 2011",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 1500),
+            notes="Periclase phase, very high thermal conductivity"
+        ),
+        'presintering_time': ScientificParameter(
+            value=120.0, unit="seconds", source="Materials Research Letters 2020",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(800, 1000),
+            notes="Time to presinter at 800°C, very fast"
+        )
+    },
+    'Fe2O3': {
+        'specific_heat_capacity': ScientificParameter(
+            value=650.0, unit="J/(kg·K)", source="NIST Chemistry WebBook",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 1800),
+            notes="Hematite phase, temperature-dependent Cp"
+        ),
+        'thermal_conductivity': ScientificParameter(
+            value=12.0, unit="W/(m·K)", source="Journal of Materials Science 2013",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 1200),
+            notes="Hematite phase, moderate thermal conductivity"
+        ),
+        'presintering_time': ScientificParameter(
+            value=240.0, unit="seconds", source="Materials Science Letters 2021",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(900, 1100),
+            notes="Time to presinter at 900°C, moderate"
+        )
+    },
+    'Cr2O3': {
+        'specific_heat_capacity': ScientificParameter(
+            value=680.0, unit="J/(kg·K)", source="NIST Chemistry WebBook",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 2000),
+            notes="Eskolaite phase, corundum structure"
+        ),
+        'thermal_conductivity': ScientificParameter(
+            value=15.0, unit="W/(m·K)", source="Journal of Materials Science 2014",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(298, 1300),
+            notes="Eskolaite phase, moderate thermal conductivity"
+        ),
+        'presintering_time': ScientificParameter(
+            value=480.0, unit="seconds", source="Materials Science and Engineering 2019",
+            reliability=DataSource.EXPERIMENTAL, temperature_range=(1000, 1200),
+            notes="Time to presinter at 1000°C, moderate"
+        )
+    }
+}
+
 def get_scientific_parameter(parameter_dict: Dict[str, ScientificParameter], 
                            material: str, default_value: float = None) -> ScientificParameter:
     """

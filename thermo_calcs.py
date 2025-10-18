@@ -678,10 +678,22 @@ class ThermodynamicEngine:
         
         if oxide_key in FLASH_ENHANCEMENT_SCIENTIFIC:
             beta = FLASH_ENHANCEMENT_SCIENTIFIC[oxide_key].value
-            T_flash = 1200  # Default flash temperature
+            # Get material-specific flash temperature from validation module
+            from validation_module import ValidationEngine
+            validation_engine = ValidationEngine()
+            if oxide_key in validation_engine.experimental_data:
+                T_flash = validation_engine.experimental_data[oxide_key]['flash_temperature']
+            else:
+                T_flash = 1200  # Default fallback
         else:
             beta = 30.0
-            T_flash = 1200
+            # Get material-specific flash temperature from validation module
+            from validation_module import ValidationEngine
+            validation_engine = ValidationEngine()
+            if oxide_key in validation_engine.experimental_data:
+                T_flash = validation_engine.experimental_data[oxide_key]['flash_temperature']
+            else:
+                T_flash = 1200  # Default fallback
         
         # Calculate kinetic parameters
         R = 8.314e-3  # kJ/(mol·K)
@@ -887,6 +899,22 @@ class ThermodynamicEngine:
         # Validate against experimental data
         flash_validation = kinetics.validate_flash_conditions(oxide_key, T_K, E)
         
+        # Calculate particle heating time to prevent presintering
+        # Using preheating fraction from config (70% by default)
+        from config import PREHEATING_FRACTION
+        heating_analysis = self.calc_particle_heating_time(
+            oxide_key, r, T_initial=300.0, T_flash=T_flash, heating_rate=100.0,
+            T_exit_gas=1200.0, tube_length=tube_length, gas_velocity=gas_velocity,
+            preheating_fraction=PREHEATING_FRACTION
+        )
+        
+        # Presintering prevention check
+        presintering_safe = heating_analysis['presintering_safe']
+        presintering_safety_factor = heating_analysis['presintering_safety_factor']
+        
+        # Overall process feasibility (must be thermodynamically feasible AND presintering safe)
+        overall_feasible = thermo_feasible and presintering_safe
+        
         return {
             'oxide_key': oxide_key,
             'temperature_K': T_K,
@@ -920,7 +948,215 @@ class ThermodynamicEngine:
             'field_enhancement_factor': field_enhancement,
             'flash_enhancement_factor': flash_enhancement,
             'total_enhancement_factor': field_enhancement * flash_enhancement,
-            'validation_results': flash_validation
+            'validation_results': flash_validation,
+            # Presintering prevention analysis
+            'heating_time_s': heating_analysis['heating_time_total_s'],
+            'presintering_time_s': heating_analysis['presintering_time_s'],
+            'presintering_safety_factor': presintering_safety_factor,
+            'presintering_safe': presintering_safe,
+            'overall_feasible': overall_feasible,
+            'heating_analysis': heating_analysis
+        }
+
+    def calc_particle_heating_time(self, oxide_key: str, r: float, T_initial: float = 300.0, 
+                                  T_flash: float = None, heating_rate: float = 100.0,
+                                  T_exit_gas: float = 1200.0, tube_length: float = 1.0,
+                                  gas_velocity: float = 5.0, preheating_fraction: float = 0.7) -> Dict:
+        """
+        Calculate particle heating time to reach flash temperature with realistic counter-current flow.
+        
+        IMPORTANT PHYSICS ASSUMPTIONS:
+        - Preheating only reduces heating time needed, does NOT put particles in flash state
+        - Flash activation requires BOTH temperature threshold AND electron plasma/magnetic field interaction
+        - Preheated particles must still be heated to flash threshold before plasma activation
+        
+        Args:
+            oxide_key: Oxide identifier
+            r: Particle radius in m
+            T_initial: Initial particle temperature in K (default: room temperature)
+            T_flash: Flash temperature threshold in K (if None, uses material-specific value)
+            heating_rate: Heating rate in K/s (default: 100 K/s for fast heating)
+            T_exit_gas: Hot exit gas temperature in K (default: 1200K = 927°C)
+            tube_length: Reactor tube length in m (default: 1.0m)
+            gas_velocity: Gas velocity in m/s (default: 5.0 m/s)
+            preheating_fraction: Fraction of exit gas temperature achieved in preheating (default: 0.7 = 70%)
+            
+        Returns:
+            Dictionary with heating time analysis results
+        """
+        from scientific_data import THERMAL_PROPERTIES_SCIENTIFIC, get_parameter_with_validation
+        from validation_module import ValidationEngine
+        
+        # Get material-specific flash temperature if not provided
+        if T_flash is None:
+            validation_engine = ValidationEngine()
+            if oxide_key in validation_engine.experimental_data:
+                T_flash = validation_engine.experimental_data[oxide_key]['flash_temperature']
+            else:
+                T_flash = 1200  # Default fallback
+        
+        # Get thermal properties
+        if oxide_key in THERMAL_PROPERTIES_SCIENTIFIC:
+            thermal_props = THERMAL_PROPERTIES_SCIENTIFIC[oxide_key]
+            
+            # Get specific heat capacity
+            cp, cp_warning = get_parameter_with_validation(
+                {'cp': thermal_props['specific_heat_capacity']}, 
+                oxide_key, T_flash, default_value=700.0
+            )
+            
+            # Get thermal conductivity
+            k, k_warning = get_parameter_with_validation(
+                {'k': thermal_props['thermal_conductivity']}, 
+                oxide_key, T_flash, default_value=10.0
+            )
+            
+            # Get presintering time
+            t_presinter, presinter_warning = get_parameter_with_validation(
+                {'t_presinter': thermal_props['presintering_time']}, 
+                oxide_key, T_flash, default_value=300.0
+            )
+        else:
+            # Default values if material not found
+            cp = 700.0  # J/(kg·K)
+            k = 10.0    # W/(m·K)
+            t_presinter = 300.0  # seconds
+            cp_warning = f"WARNING: Using default thermal properties for {oxide_key}"
+            k_warning = f"WARNING: Using default thermal properties for {oxide_key}"
+            presinter_warning = f"WARNING: Using default presintering time for {oxide_key}"
+        
+        # Particle properties
+        particle_density = 4000.0  # kg/m³ (typical for metal oxides)
+        particle_volume = (4/3) * np.pi * r**3
+        particle_mass = particle_density * particle_volume
+        particle_surface_area = 4 * np.pi * r**2
+        
+        # Counter-current heat exchange model
+        # Hot gas flows upward while particles fall downward
+        
+        # Gas properties (H2/N2 mixture at high temperature)
+        gas_density = 0.3  # kg/m³ (at 1200K)
+        gas_cp = 1200.0    # J/(kg·K) (H2/N2 mixture)
+        gas_viscosity = 4.0e-5  # Pa·s (at 1200K)
+        gas_thermal_conductivity = 0.08  # W/(m·K)
+        
+        # Particle settling velocity (Stokes law)
+        g = 9.81  # m/s²
+        settling_velocity = (2 * particle_mass * g) / (6 * np.pi * gas_viscosity * r)
+        
+        # Relative velocity between gas and particles
+        relative_velocity = gas_velocity + settling_velocity
+        
+        # Reynolds number for heat transfer
+        Re = (gas_density * relative_velocity * 2 * r) / gas_viscosity
+        
+        # Prandtl number
+        Pr = (gas_cp * gas_viscosity) / gas_thermal_conductivity
+        
+        # Nusselt number (Ranz-Marshall correlation for spheres)
+        Nu = 2 + 0.6 * (Re**0.5) * (Pr**(1/3))
+        
+        # Heat transfer coefficient
+        h_heat_transfer = (Nu * gas_thermal_conductivity) / (2 * r)
+        
+        # Counter-current preheating analysis
+        # Particles are preheated by hot exit gas before reaching main heating zone
+        
+        # Preheating zone: particles heated by hot exit gas to specified fraction
+        T_preheated = T_initial + (T_exit_gas - T_initial) * preheating_fraction
+        
+        # Time in preheating zone (top 20% of reactor)
+        preheating_length = tube_length * 0.2
+        t_preheating = preheating_length / settling_velocity
+        
+        # Main heating zone: particles heated from preheated temperature to flash temperature
+        # IMPORTANT: Preheated particles must still reach flash threshold before plasma activation
+        delta_T_main = T_flash - T_preheated
+        
+        # Check if preheating is sufficient to reach flash threshold
+        if T_preheated >= T_flash:
+            # Particles are already above flash threshold - no additional heating needed
+            t_heating_main_final = 0.0
+            flash_ready_at_entry = True
+        else:
+            # Additional heating needed to reach flash threshold
+            flash_ready_at_entry = False
+        
+            # Calculate heating time in main zone
+            thermal_mass = particle_mass * cp  # J/K
+            heat_transfer_capacity = h_heat_transfer * particle_surface_area  # W/K
+            
+            t_heating_main = thermal_mass / heat_transfer_capacity  # seconds
+            
+            # Alternative calculation using heating rate
+            t_heating_rate = delta_T_main / heating_rate  # seconds
+            
+            # Use the longer of the two (more conservative)
+            t_heating_main_final = max(t_heating_main, t_heating_rate)
+        
+        # Total heating time (preheating + main heating)
+        t_heating_total = t_preheating + t_heating_main_final
+        
+        # Presintering prevention check
+        presintering_safety_factor = t_presinter / t_heating_total
+        presintering_safe = presintering_safety_factor > 2.0  # Safety factor of 2
+        
+        # Calculate Biot number for thermal analysis
+        biot_number = (h_heat_transfer * r) / k
+        
+        # Determine heating regime
+        if biot_number < 0.1:
+            heating_regime = "Uniform heating (low Biot number)"
+        elif biot_number < 10:
+            heating_regime = "Mixed heating (moderate Biot number)"
+        else:
+            heating_regime = "Surface heating (high Biot number)"
+        
+        return {
+            'oxide_key': oxide_key,
+            'particle_radius_um': r * 1e6,
+            'initial_temperature_K': T_initial,
+            'initial_temperature_C': T_initial - 273.15,
+            'flash_temperature_K': T_flash,
+            'flash_temperature_C': T_flash - 273.15,
+            'exit_gas_temperature_K': T_exit_gas,
+            'exit_gas_temperature_C': T_exit_gas - 273.15,
+            'preheated_temperature_K': T_preheated,
+            'preheated_temperature_C': T_preheated - 273.15,
+            'preheating_fraction': preheating_fraction,
+            'temperature_rise_total_K': T_flash - T_initial,
+            'temperature_rise_main_K': delta_T_main,
+            'heating_rate_K_s': heating_rate,
+            'specific_heat_capacity_J_kgK': cp,
+            'thermal_conductivity_W_mK': k,
+            'presintering_time_s': t_presinter,
+            'preheating_time_s': t_preheating,
+            'heating_time_main_s': t_heating_main_final,
+            'heating_time_total_s': t_heating_total,
+            'flash_ready_at_entry': flash_ready_at_entry,
+            'presintering_safety_factor': presintering_safety_factor,
+            'presintering_safe': presintering_safe,
+            'biot_number': biot_number,
+            'heating_regime': heating_regime,
+            'particle_mass_kg': particle_mass,
+            'particle_volume_m3': particle_volume,
+            'particle_surface_area_m2': particle_surface_area,
+            'heat_transfer_coefficient_W_m2K': h_heat_transfer,
+            'thermal_mass_J_K': thermal_mass,
+            'heat_transfer_capacity_W_K': heat_transfer_capacity,
+            'reynolds_number': Re,
+            'prandtl_number': Pr,
+            'nusselt_number': Nu,
+            'settling_velocity_m_s': settling_velocity,
+            'relative_velocity_m_s': relative_velocity,
+            'preheating_length_m': preheating_length,
+            'tube_length_m': tube_length,
+            'gas_velocity_m_s': gas_velocity,
+            'warnings': {
+                'specific_heat': cp_warning,
+                'thermal_conductivity': k_warning,
+                'presintering_time': presinter_warning
+            }
         }
 
 

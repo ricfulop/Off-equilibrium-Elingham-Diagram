@@ -39,6 +39,20 @@ from custom_compound_ui import (
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 app.title = "Off-Equilibrium Ellingham Diagrams"
 
+# Authentication setup
+import os
+from dash_auth import BasicAuth
+
+# Environment-based credentials for security
+USERNAME_PASSWORD_PAIRS = {
+    os.getenv('ADMIN_USER', 'admin'): os.getenv('ADMIN_PASS', 'ellingham2025'),
+    os.getenv('RESEARCHER_USER', 'researcher'): os.getenv('RESEARCHER_PASS', 'research2025'),
+    os.getenv('STUDENT_USER', 'student'): os.getenv('STUDENT_PASS', 'student2025')
+}
+
+# Apply authentication
+auth = BasicAuth(app, USERNAME_PASSWORD_PAIRS)
+
 # Load data
 print("Loading JANAF thermodynamic data...")
 data_loader = load_janaf_data()
@@ -1432,4 +1446,7 @@ def import_custom_compounds(contents):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8051)
+    # Use environment PORT for Railway deployment, fallback to 8051 for local
+    port = int(os.getenv('PORT', 8051))
+    debug = os.getenv('DEBUG', 'True').lower() == 'true'
+    app.run(debug=debug, host='0.0.0.0', port=port)

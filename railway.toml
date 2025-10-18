@@ -1,0 +1,17 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python app.py"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+
+[env]
+PORT = "8050"
+ADMIN_USER = "ricfulop"
+ADMIN_PASS = "ellingham_admin_2025"
+RESEARCHER_USER = "researcher"
+RESEARCHER_PASS = "research_access_2025"
+STUDENT_USER = "student"
+STUDENT_PASS = "student_access_2025"
