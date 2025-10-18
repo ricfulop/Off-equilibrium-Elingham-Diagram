@@ -1,0 +1,18 @@
+[phases.setup]
+nixPkgs = ["python39", "pip"]
+
+[phases.install]
+cmds = [
+    "pip install --upgrade pip",
+    "pip install -r requirements.txt",
+    "pip install dash-auth==2.0.0 --force-reinstall --no-cache-dir"
+]
+
+[phases.build]
+cmds = [
+    "pip install dash-auth==2.0.0 --force-reinstall --no-cache-dir",
+    "python -c 'import dash_auth; print(\"✅ dash_auth successfully installed\")'"
+]
+
+[start]
+cmd = "python app.py"
