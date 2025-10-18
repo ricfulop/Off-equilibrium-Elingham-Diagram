@@ -162,6 +162,21 @@ app.layout = dbc.Container([
                     html.Small("Select gas composition for feasibility analysis", className="text-muted")
                 ], className="control-section"),
                 
+                # Entry Temperature
+                html.Div([
+                    html.H6("Entry Temperature"),
+                    dcc.Slider(
+                        id='entry-temp-slider',
+                        min=300,
+                        max=800,
+                        step=25,
+                        value=300,
+                        marks={300: '27°C', 400: '127°C', 500: '227°C', 600: '327°C', 700: '427°C', 800: '527°C'},
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    ),
+                    html.Small("Material temperature entering the reactor tube", className="text-muted")
+                ], className="control-section"),
+                
                 # Temperature Range
                 html.Div([
                     html.H6("Temperature Range"),
@@ -751,9 +766,10 @@ def update_plot(materials, field_MV_m, radius_radio, radius_custom, temp_range, 
      Input('radius-radio', 'value'),
      Input('radius-custom', 'value'),
      Input('temp-range-slider', 'value'),
-     Input('gas-composition-radio', 'value')]  # New input
+     Input('gas-composition-radio', 'value'),
+     Input('entry-temp-slider', 'value')]  # New input
 )
-def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_range, gas_composition):
+def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_range, gas_composition, entry_temp_K):
     """Update the info panel with thermodynamic analysis."""
     if not materials:
         return "Select materials to see thermodynamic analysis."
@@ -818,7 +834,7 @@ def update_info_panel(materials, field_MV_m, radius_radio, radius_custom, temp_r
                 validation_results.append(validation)
     
     # Create info text
-    info_text = create_info_text(validation_results, gas_composition)
+    info_text = create_info_text(validation_results, gas_composition, entry_temp_K)
     
     return dcc.Markdown(info_text)
 

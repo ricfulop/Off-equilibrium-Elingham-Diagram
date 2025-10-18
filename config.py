@@ -117,6 +117,15 @@ TUBE_DIAMETER = 0.05  # m (5 cm)
 PARTICLE_DENSITY = 4500  # kg/m³ (typical for metal oxides)
 GAS_VELOCITY = 1.0  # m/s (typical for fluidized bed)
 H2_EFFICIENCY = 0.95  # H₂ utilization efficiency (95%)
+ENTRY_TEMPERATURE = 300  # K (27°C) - Material entry temperature into tube
+EXIT_TEMPERATURE = 1200  # K (927°C) - Target exit temperature
+
+# Preheating feeder parameters
+PREHEATING_FRACTION = 0.7  # Fraction of exit gas temperature achieved in preheating (70%)
+# IMPORTANT PHYSICS ASSUMPTIONS:
+# - Preheating only reduces heating time needed, does NOT put particles in flash state
+# - Flash activation requires BOTH temperature threshold AND electron plasma/magnetic field interaction
+# - Preheated particles must still be heated to flash threshold before plasma activation
 
 # Molecular weights (g/mol)
 MOLECULAR_WEIGHTS = {

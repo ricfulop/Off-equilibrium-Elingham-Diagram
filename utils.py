@@ -237,7 +237,7 @@ def export_data_to_csv(oxide_data: Dict, filename: str) -> str:
 
 
 def create_info_text(validation_results: List[Dict], gas_composition: str = 'N2_H2_25', 
-                    h2_pressure: float = 0.25, target_conversion: float = 0.95) -> str:
+                    entry_temp_K: float = 300, h2_pressure: float = 0.25, target_conversion: float = 0.95) -> str:
     """Create formatted info text for display with confidence levels and validation."""
     if not validation_results:
         return "No data to display"
@@ -358,9 +358,24 @@ def create_info_text(validation_results: List[Dict], gas_composition: str = 'N2_
     text_lines.append(f"- Tube diameter: {TUBE_DIAMETER*100:.0f} cm")
     text_lines.append(f"- Gas velocity: {GAS_VELOCITY:.1f} m/s")
     text_lines.append(f"- Residence time: {residence_time:.1f} s")
+    text_lines.append(f"- Entry temperature: {entry_temp_K:.0f} K ({entry_temp_K-273:.0f}°C)")
     text_lines.append(f"- Particle mass: {particle_mass*1e9:.1f} ng")
     text_lines.append(f"- Particles per kg: {particles_per_kg:.2e}")
     text_lines.append("")
+    
+    # Temperature gradient analysis
+    text_lines.append(f"**Temperature Gradient Analysis:**")
+    if validation_results:
+        first_result = validation_results[0]
+        T_exit_K = first_result['temperature_K']
+        delta_T = T_exit_K - entry_temp_K
+        heating_rate = delta_T / residence_time  # K/s
+        
+        text_lines.append(f"- Entry temperature: {entry_temp_K:.0f} K ({entry_temp_K-273:.0f}°C)")
+        text_lines.append(f"- Exit temperature: {T_exit_K:.0f} K ({T_exit_K-273:.0f}°C)")
+        text_lines.append(f"- Temperature rise: {delta_T:.0f} K ({delta_T:.0f}°C)")
+        text_lines.append(f"- Heating rate: {heating_rate:.1f} K/s ({heating_rate*60:.0f} K/min)")
+        text_lines.append("")
     
     text_lines.append(f"**H₂ Consumption Analysis:**")
     text_lines.append(f"- Molecular weight of {oxide}: {oxide_mw:.1f} g/mol")
