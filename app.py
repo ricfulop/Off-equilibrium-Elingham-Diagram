@@ -41,7 +41,12 @@ app.title = "Off-Equilibrium Ellingham Diagrams"
 
 # Authentication setup
 import os
-from dash_auth import BasicAuth
+try:
+    from dash_auth import BasicAuth
+    AUTH_AVAILABLE = True
+except ImportError:
+    print("Warning: dash_auth not available. Running without authentication.")
+    AUTH_AVAILABLE = False
 
 # Environment-based credentials for security
 USERNAME_PASSWORD_PAIRS = {
@@ -50,14 +55,19 @@ USERNAME_PASSWORD_PAIRS = {
     os.getenv('STUDENT_USER', 'student'): os.getenv('STUDENT_PASS', 'student2025')
 }
 
-# Apply authentication
-auth = BasicAuth(app, USERNAME_PASSWORD_PAIRS)
+# Apply authentication (if available)
+if AUTH_AVAILABLE:
+    auth = BasicAuth(app, USERNAME_PASSWORD_PAIRS)
+    print("✅ Authentication enabled")
+else:
+    print("⚠️  Running without authentication")
 
 # Add health check endpoint
 @app.server.route('/health')
 def health_check():
     """Health check endpoint for Railway deployment."""
-    return {'status': 'healthy', 'version': '2.0.0', 'auth': 'enabled'}, 200
+    auth_status = 'enabled' if AUTH_AVAILABLE else 'disabled'
+    return {'status': 'healthy', 'version': '2.0.1', 'auth': auth_status}, 200
 
 # Load data with error handling
 print("Loading JANAF thermodynamic data...")
